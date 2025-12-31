@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Discipline OS | Personal Dashboard</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Kalam:wght@300;400;700&display=swap" rel="stylesheet">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- jsPDF for PDF generation -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="style.css">
+    <!-- Favicon -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎯</text></svg>">
+</head>
+<body>
+    <!-- Toast Notification -->
+    <div id="undo-toast" class="undo-toast hidden">
+        <span id="toast-message">Action completed</span>
+        <button id="undo-action" class="undo-btn">Undo</button>
+    </div>
+
+    <!-- Download Modal -->
+    <div id="download-modal" class="modal">
+        <div class="modal-content large">
+            <div class="modal-header">
+                <h2 class="modal-title"><i class="fas fa-download"></i> Download Report</h2>
+                <button class="close-modal" id="close-download-modal">&times;</button>
+            </div>
+            <div class="download-options">
+                <div class="option-group">
+                    <label class="option-label">Report Type:</label>
+                    <select id="report-type" class="option-select">
+                        <option value="daily">Daily Report</option>
+                        <option value="weekly">Weekly Report</option>
+                        <option value="monthly">Monthly Report</option>
+                        <option value="custom">Custom Date Range</option>
+                    </select>
+                </div>
+                
+                <!-- Daily Date Selector -->
+                <div class="option-group" id="daily-date-group" style="display: none;">
+                    <label class="option-label">Select Date:</label>
+                    <input type="date" id="daily-date" class="option-select">
+                </div>
+                
+                <!-- Weekly Calendar -->
+                <div class="option-group" id="weekly-calendar-group" style="display: none;">
+                    <label class="option-label">Select Week:</label>
+                    <div class="calendar-container">
+                        <input type="week" id="weekly-select" class="option-select">
+                    </div>
+                </div>
+                
+                <!-- Monthly Calendar -->
+                <div class="option-group" id="monthly-calendar-group" style="display: none;">
+                    <label class="option-label">Select Month:</label>
+                    <input type="month" id="monthly-select" class="option-select">
+                </div>
+                
+                <div class="option-group" id="date-range-group">
+                    <label class="option-label">Custom Date Range:</label>
+                    <div class="date-range-inputs">
+                        <input type="date" id="start-date" class="option-select">
+                        <input type="date" id="end-date" class="option-select">
+                    </div>
+                </div>
+                
+                <button id="generate-pdf" class="download-btn">
+                    <i class="fas fa-file-pdf"></i> Generate PDF Report
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- History Modal -->
+    <div id="history-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title"><i class="fas fa-history"></i> History</h2>
+                <button class="close-modal" id="close-history-modal">&times;</button>
+            </div>
+            <div class="history-container" id="history-list">
+                <!-- History will be populated by JavaScript -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Detailed View Modal -->
+    <div id="detail-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title" id="detail-title"></h2>
+                <button class="close-modal" id="close-detail-modal">&times;</button>
+            </div>
+            <div id="detail-content">
+                <!-- Detailed content will be populated by JavaScript -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settings-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title"><i class="fas fa-cog"></i> Settings</h2>
+                <button class="close-modal" id="close-settings-modal">&times;</button>
+            </div>
+            <div class="settings-content">
+                <div class="settings-group">
+                    <label class="settings-label">Morning Routine Goals:</label>
+                    <input type="number" id="routine-target" class="settings-input" min="1" max="10" value="7">
+                </div>
+                
+                <div class="settings-group">
+                    <label class="settings-label">Daily Water Target (glasses):</label>
+                    <input type="number" id="water-target" class="settings-input" min="1" max="20" value="8">
+                </div>
+                
+                <div class="settings-group">
+                    <label class="settings-label">Daily Coffee Target (cups):</label>
+                    <input type="number" id="coffee-target" class="settings-input" min="0" max="10" value="2">
+                </div>
+                
+                <div class="settings-group">
+                    <label class="settings-label">Daily Tea Target (cups):</label>
+                    <input type="number" id="tea-target" class="settings-input" min="0" max="10" value="1">
+                </div>
+                
+                <div class="settings-group">
+                    <label class="settings-label">Data Management:</label>
+                    <div class="settings-buttons">
+                        <button id="export-data" class="settings-btn">Export Data</button>
+                        <button id="import-data" class="settings-btn secondary">Import Data</button>
+                        <button id="clear-data" class="settings-btn secondary">Clear All Data</button>
+                    </div>
+                </div>
+                
+                <div class="settings-group">
+                    <button id="save-settings" class="settings-btn save-btn">
+                        <i class="fas fa-save"></i> Save Settings
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Container -->
+    <div class="app-container">
+        <!-- Header -->
+        <header class="app-header">
+            <div class="header-left">
+                <div class="app-title">
+                    <i class="fas fa-compass"></i>
+                    <div>
+                        <h1>Discipline OS</h1>
+                        <span class="malayalam-quote">അവിവേകത്തിന്റെ അപൂർണ്ണമായ പ്രത്യക്ഷത</span>
+                    </div>
+                </div>
+                <div class="header-stats">
+                    <div class="stat-item">
+                        <span class="stat-label">Current Date</span>
+                        <div class="stat-value" id="current-date-display">Today</div>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Day Streak</span>
+                        <span class="stat-value" id="streak-count">0</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Weekly Avg</span>
+                        <span class="stat-value" id="weekly-avg">0%</span>
+                    </div>
+                </div>
+            </div>
+            <div class="header-controls">
+                <button class="btn-icon" id="prev-day-btn" title="Previous Day">
+                    <i class="fas fa-chevron-left"></i>
+                </button>
+                <button class="btn-icon" id="next-day-btn" title="Next Day">
+                    <i class="fas fa-chevron-right"></i>
+                </button>
+                <button class="btn-icon" id="today-btn" title="Today">
+                    <i class="fas fa-calendar-day"></i>
+                </button>
+                <button class="btn-icon" id="history-btn" title="View History">
+                    <i class="fas fa-history"></i>
+                </button>
+                <button class="btn-icon" id="download-btn" title="Download Report">
+                    <i class="fas fa-download"></i>
+                </button>
+                <button class="btn-icon" id="settings-btn" title="Settings">
+                    <i class="fas fa-cog"></i>
+                </button>
+            </div>
+        </header>
+
+        <!-- Date Navigation -->
+        <div class="date-navigation">
+            <button class="nav-btn" id="prev-day">
+                <i class="fas fa-chevron-left"></i>
+            </button>
+            <div class="current-date-display" id="current-date-text">
+                Today, January 1, 2024
+            </div>
+            <button class="nav-btn" id="next-day">
+                <i class="fas fa-chevron-right"></i>
+            </button>
+        </div>
+
+        <!-- Dashboard Grid -->
+        <main class="dashboard-grid">
+            <!-- Morning Routine -->
+            <section class="dashboard-card card-wide">
+                <div class="card-header">
+                    <h2><i class="fas fa-sun"></i> Morning Routine</h2>
+                    <div class="completion-badge">
+                        <span id="morning-percentage">0%</span>
+                    </div>
+                </div>
+                <div class="routine-timeline" id="morning-routine-timeline">
+                    <!-- Will be filled by JavaScript -->
+                </div>
+                <div class="card-footer">
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="morning-progress"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Consumption -->
+            <section class="dashboard-card card-wide">
+                <div class="card-header">
+                    <h2><i class="fas fa-tint"></i> Consumption</h2>
+                    <button class="btn-reset" id="reset-consumption">Reset Day</button>
+                </div>
+                <div class="consumption-grid">
+                    <!-- Water -->
+                    <div class="consumption-item">
+                        <div class="consumption-icon">
+                            <i class="fas fa-glass-water"></i>
+                        </div>
+                        <div class="consumption-info">
+                            <h3>Water</h3>
+                            <div class="consumption-controls">
+                                <button class="btn-decrement" data-type="water">
+                                    <i class="fas fa-minus"></i>
+                                </button>
+                                <span class="consumption-count" id="water-count">0</span>
+                                <button class="btn-increment" data-type="water">
+                                    <i class="fas fa-plus"></i>
+                                </button>
+                            </div>
+                            <div class="consumption-target">Target: <span id="water-target-display">8</span> glasses</div>
+                        </div>
+                    </div>
+                    
+                    <!-- Coffee -->
+                    <div class="consumption-item">
+                        <div class="consumption-icon">
+                            <i class="fas fa-coffee"></i>
+                        </div>
+                        <div class="consumption-info">
+                            <h3>Coffee</h3>
+                            <div class="consumption-controls">
+                                <button class="btn-decrement" data-type="coffee">
+                                    <i class="fas fa-minus"></i>
+                                </button>
+                                <span class="consumption-count" id="coffee-count">0</span>
+                                <button class="btn-increment" data-type="coffee">
+                                    <i class="fas fa-plus"></i>
+                                </button>
+                            </div>
+                            <div class="consumption-target">Target: <span id="coffee-target-display">2</span> cups</div>
+                        </div>
+                    </div>
+                    
+                    <!-- Tea -->
+                    <div class="consumption-item">
+                        <div class="consumption-icon">
+                            <i class="fas fa-mug-hot"></i>
+                        </div>
+                        <div class="consumption-info">
+                            <h3>Tea</h3>
+                            <div class="consumption-controls">
+                                <button class="btn-decrement" data-type="tea">
+                                    <i class="fas fa-minus"></i>
+                                </button>
+                                <span class="consumption-count" id="tea-count">0</span>
+                                <button class="btn-increment" data-type="tea">
+                                    <i class="fas fa-plus"></i>
+                                </button>
+                            </div>
+                            <div class="consumption-target">Target: <span id="tea-target-display">1</span> cup</div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Archery -->
+            <section class="dashboard-card">
+                <div class="card-header">
+                    <h2><i class="fas fa-bullseye"></i> Archery Practice</h2>
+                    <div class="session-counter">
+                        <span id="archery-sessions">0 sessions</span>
+                    </div>
+                </div>
+                <div class="archery-actions">
+                    <button class="archery-btn" data-type="class">
+                        <i class="fas fa-chalkboard-teacher"></i>
+                        <span>Class</span>
+                    </button>
+                    <button class="archery-btn" data-type="stretching">
+                        <i class="fas fa-hands"></i>
+                        <span>Stretching</span>
+                    </button>
+                    <button class="archery-btn" data-type="shooting">
+                        <i class="fas fa-crosshairs"></i>
+                        <span>Shooting</span>
+                    </button>
+                    <button class="archery-btn" data-type="workout">
+                        <i class="fas fa-dumbbell"></i>
+                        <span>Workout</span>
+                    </button>
+                </div>
+                <div class="archery-log" id="archery-log">
+                    <!-- Will be filled by JavaScript -->
+                </div>
+            </section>
+
+            <!-- Self-Care -->
+            <section class="dashboard-card">
+                <div class="card-header">
+                    <h2><i class="fas fa-heart"></i> Self-Care</h2>
+                </div>
+                <div class="selfcare-items">
+                    <div class="selfcare-item">
+                        <div class="selfcare-toggle">
+                            <input type="checkbox" id="hair-care" class="toggle-switch">
+                            <label for="hair-care" class="toggle-label"></label>
+                        </div>
+                        <div class="selfcare-info">
+                            <h3>Hair Care</h3>
+                            <p>Daily maintenance routine</p>
+                        </div>
+                        <i class="fas fa-spa selfcare-icon"></i>
+                    </div>
+                    <div class="selfcare-item">
+                        <div class="selfcare-toggle">
+                            <input type="checkbox" id="face-care" class="toggle-switch">
+                            <label for="face-care" class="toggle-label"></label>
+                        </div>
+                        <div class="selfcare-info">
+                            <h3>Face Care</h3>
+                            <p>Skincare routine</p>
+                        </div>
+                        <i class="fas fa-user-cog selfcare-icon"></i>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Reports & Analytics -->
+            <section class="dashboard-card card-full">
+                <div class="card-header">
+                    <h2><i class="fas fa-chart-line"></i> Analytics & Reports</h2>
+                    <div class="report-tabs">
+                        <button class="report-tab active" data-period="daily">Daily</button>
+                        <button class="report-tab" data-period="weekly">Weekly</button>
+                        <button class="report-tab" data-period="monthly">Monthly</button>
+                    </div>
+                </div>
+
+                <!-- Daily Report -->
+                <div class="report-section active" id="daily-report">
+                    <div class="summary-stats">
+                        <div class="summary-stat" id="daily-routine-stat">
+                            <div class="summary-stat-value" id="daily-routine-percent">0%</div>
+                            <div class="summary-stat-label">Routine Completion</div>
+                        </div>
+                        <div class="summary-stat" id="daily-consumption-stat">
+                            <div class="summary-stat-value" id="daily-water">0</div>
+                            <div class="summary-stat-label">Consumption</div>
+                        </div>
+                        <div class="summary-stat" id="daily-archery-stat">
+                            <div class="summary-stat-value" id="daily-archery">0</div>
+                            <div class="summary-stat-label">Archery Sessions</div>
+                        </div>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="daily-chart"></canvas>
+                    </div>
+                    <div class="insights-container">
+                        <h3>Today's Insights</h3>
+                        <div id="daily-insights">
+                            <!-- Insights will be populated by JavaScript -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Weekly Report -->
+                <div class="report-section" id="weekly-report">
+                    <div class="summary-stats">
+                        <div class="summary-stat">
+                            <div class="summary-stat-value" id="weekly-avg-percent">0%</div>
+                            <div class="summary-stat-label">Weekly Average</div>
+                        </div>
+                        <div class="summary-stat">
+                            <div class="summary-stat-value" id="weekly-streak">0</div>
+                            <div class="summary-stat-label">Consecutive Days</div>
+                        </div>
+                        <div class="summary-stat">
+                            <div class="summary-stat-value" id="weekly-total">0</div>
+                            <div class="summary-stat-label">Total Sessions</div>
+                        </div>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="weekly-chart"></canvas>
+                    </div>
+                    <div class="insights-container">
+                        <h3>Weekly Summary</h3>
+                        <div id="weekly-insights">
+                            <!-- Insights will be populated by JavaScript -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Monthly Report -->
+                <div class="report-section" id="monthly-report">
+                    <div class="summary-stats">
+                        <div class="summary-stat">
+                            <div class="summary-stat-value" id="monthly-avg">0%</div>
+                            <div class="summary-stat-label">Monthly Average</div>
+                        </div>
+                        <div class="summary-stat">
+                            <div class="summary-stat-value" id="monthly-best">0</div>
+                            <div class="summary-stat-label">Best Streak</div>
+                        </div>
+                        <div class="summary-stat">
+                            <div class="summary-stat-value" id="monthly-days">0</div>
+                            <div class="summary-stat-label">Active Days</div>
+                        </div>
+                    </div>
+                    <div class="heatmap" id="monthly-heatmap">
+                        <!-- Will be filled by JavaScript -->
+                    </div>
+                    <div class="charts-grid">
+                        <div class="mini-chart">
+                            <canvas id="monthly-trend-chart"></canvas>
+                        </div>
+                        <div class="mini-chart">
+                            <canvas id="monthly-distribution-chart"></canvas>
+                        </div>
+                    </div>
+                    <div class="insights-container">
+                        <h3>Monthly Reflection</h3>
+                        <div id="monthly-insights">
+                            <!-- Insights will be populated by JavaScript -->
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- Footer -->
+        <footer class="app-footer">
+            <div class="footer-content">
+                <p>Discipline OS • Personal Dashboard v3.0</p>
+                <div class="footer-links">
+                    <button id="settings-btn-footer">Settings</button>
+                </div>
+            </div>
+        </footer>
+    </div>
+
+    <!-- Custom JavaScript -->
+    <script src="script.js"></script>
+</body>
+</html>
