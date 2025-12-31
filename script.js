@@ -14,6 +14,7 @@ class DashboardApp {
             const history = JSON.parse(saved);
             const today = this.formatDate(new Date());
             
+            // If we have today's data, use it
             if (history[today]) {
                 return {
                     date: today,
@@ -25,6 +26,7 @@ class DashboardApp {
             }
         }
         
+        // Default empty state
         return {
             date: this.formatDate(new Date()),
             morningRoutine: this.getDefaultRoutine(),
@@ -102,9 +104,8 @@ class DashboardApp {
         };
         
         localStorage.setItem('dashboardHistory', JSON.stringify(history));
-        
-        // CRITICAL FIX: Update UI immediately when data changes
-        this.updateUI();
+        this.updateCharts();
+        this.generateReports();
     }
 
     loadDate(date) {
@@ -129,6 +130,7 @@ class DashboardApp {
             };
         }
         
+        // Update date display
         document.getElementById('current-date-text').textContent = this.formatDateDisplay(date);
         document.getElementById('current-date-display').textContent = dateStr === this.formatDate(new Date()) ? 'Today' : dateStr;
         
@@ -153,9 +155,11 @@ class DashboardApp {
         const message = document.getElementById('toast-message');
         const undoBtn = document.getElementById('undo-action');
         
+        // Show toast
         toast.classList.remove('hidden');
         toast.classList.add('show');
         
+        // Set message
         const messages = {
             toggleRoutine: 'Routine item toggled',
             increment: 'Consumption increased',
@@ -166,12 +170,14 @@ class DashboardApp {
         };
         message.textContent = messages[action] || 'Action completed';
         
+        // Set undo action
         undoBtn.onclick = () => {
             this.undoAction(action, data);
             toast.classList.remove('show');
             setTimeout(() => toast.classList.add('hidden'), 300);
         };
         
+        // Auto-hide after 5 seconds
         setTimeout(() => {
             toast.classList.remove('show');
             setTimeout(() => toast.classList.add('hidden'), 300);
@@ -203,6 +209,8 @@ class DashboardApp {
                 break;
         }
         this.saveHistory();
+        this.updateUI();
+        this.generateReports();
     }
 
     updateUI() {
@@ -212,7 +220,6 @@ class DashboardApp {
         this.updateSelfCare();
         this.updateStats();
         this.updateCharts();
-        this.generateReports(); // Make sure reports update too
     }
 
     updateSettingsDisplay() {
@@ -231,9 +238,11 @@ class DashboardApp {
         const totalCount = this.settings.routineTarget || 7;
         const percentage = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
         
+        // Update percentage
         document.getElementById('morning-percentage').textContent = `${percentage}%`;
         document.getElementById('morning-progress').style.width = `${percentage}%`;
         
+        // Update routine items
         container.innerHTML = this.state.morningRoutine.slice(0, totalCount).map(item => `
             <div class="routine-item ${item.completed ? 'completed' : ''}">
                 <div class="routine-time">${item.time}</div>
@@ -249,10 +258,12 @@ class DashboardApp {
     }
 
     updateConsumption() {
+        // Update counts
         document.getElementById('water-count').textContent = this.state.consumption.water;
         document.getElementById('coffee-count').textContent = this.state.consumption.coffee;
         document.getElementById('tea-count').textContent = this.state.consumption.tea;
         
+        // Update consumption summary
         const totalConsumption = this.state.consumption.water + this.state.consumption.coffee + this.state.consumption.tea;
         document.getElementById('daily-water').textContent = totalConsumption;
     }
@@ -260,9 +271,11 @@ class DashboardApp {
     updateArchery() {
         const logContainer = document.getElementById('archery-log');
         
+        // Update session count
         document.getElementById('archery-sessions').textContent = 
             `${this.state.archery.length} session${this.state.archery.length !== 1 ? 's' : ''}`;
         
+        // Update log
         logContainer.innerHTML = this.state.archery.length === 0 
             ? '<div style="text-align: center; color: #94a3b8; padding: 20px;">No activities logged today</div>'
             : this.state.archery.map(activity => `
@@ -298,11 +311,12 @@ class DashboardApp {
             return;
         }
         
+        // Calculate streak (consecutive days with at least 50% completion)
         let streak = 0;
         const today = new Date();
         let checkDate = new Date(today);
         
-        for (let i = 0; i < 30; i++) {
+        for (let i = 0; i < 30; i++) { // Check last 30 days max
             const dateStr = this.formatDate(checkDate);
             const dayData = history[dateStr];
             
@@ -323,6 +337,7 @@ class DashboardApp {
             checkDate.setDate(checkDate.getDate() - 1);
         }
         
+        // Calculate weekly average (last 7 days)
         const last7Dates = dates.slice(-7);
         let weeklyTotal = 0;
         let weeklyCount = 0;
@@ -346,6 +361,7 @@ class DashboardApp {
     }
 
     setupCharts() {
+        // Daily Chart
         this.charts.daily = new Chart(document.getElementById('daily-chart'), {
             type: 'bar',
             data: {
@@ -400,6 +416,7 @@ class DashboardApp {
             }
         });
 
+        // Weekly Chart
         this.charts.weekly = new Chart(document.getElementById('weekly-chart'), {
             type: 'line',
             data: {
@@ -431,6 +448,7 @@ class DashboardApp {
             }
         });
 
+        // Monthly Trend Chart
         this.charts.monthlyTrend = new Chart(document.getElementById('monthly-trend-chart'), {
             type: 'line',
             data: {
@@ -462,6 +480,7 @@ class DashboardApp {
             }
         });
 
+        // Monthly Distribution Chart
         this.charts.monthlyDistribution = new Chart(document.getElementById('monthly-distribution-chart'), {
             type: 'doughnut',
             data: {
@@ -487,6 +506,7 @@ class DashboardApp {
         const percentage = Math.round((completedCount / total) * 100);
         const selfCarePercent = ((this.state.selfCare.hair ? 1 : 0) + (this.state.selfCare.face ? 1 : 0)) * 50;
         
+        // Update daily chart with actual data
         this.charts.daily.data.datasets[0].data = [
             percentage,
             Math.min(this.state.consumption.water * (100 / this.settings.waterTarget), 100),
@@ -497,15 +517,19 @@ class DashboardApp {
         ];
         this.charts.daily.update();
         
+        // Update report stats
         document.getElementById('daily-routine-percent').textContent = `${percentage}%`;
         document.getElementById('daily-archery').textContent = this.state.archery.length;
         
+        // Get history for weekly and monthly charts
         const history = JSON.parse(localStorage.getItem('dashboardHistory') || '{}');
         const dates = Object.keys(history).sort();
         
+        // Update weekly chart with actual data
         const last7Dates = dates.slice(-7);
         const weeklyData = [];
         
+        // Get last 7 days or pad with zeros
         for (let i = 6; i >= 0; i--) {
             const date = new Date();
             date.setDate(date.getDate() - i);
@@ -524,10 +548,12 @@ class DashboardApp {
         this.charts.weekly.data.datasets[0].data = weeklyData;
         this.charts.weekly.update();
         
+        // Update weekly stats
         const weeklyAvg = weeklyData.reduce((a, b) => a + b, 0) / 7;
         document.getElementById('weekly-avg-percent').textContent = `${Math.round(weeklyAvg)}%`;
         document.getElementById('weekly-total').textContent = last7Dates.reduce((sum, date) => sum + (history[date]?.archery.length || 0), 0);
         
+        // Calculate streak for weekly
         let streak = 0;
         for (let i = weeklyData.length - 1; i >= 0; i--) {
             if (weeklyData[i] >= 50) {
@@ -538,6 +564,7 @@ class DashboardApp {
         }
         document.getElementById('weekly-streak').textContent = streak;
         
+        // Update monthly data
         const currentMonth = new Date().getMonth();
         const currentYear = new Date().getFullYear();
         const monthDates = dates.filter(date => {
@@ -554,12 +581,15 @@ class DashboardApp {
                 return Math.round((completed / total) * 100);
             });
             
+            // Update heatmap
             this.updateHeatmap(monthDates);
             
+            // Update monthly stats
             const monthlyAvg = monthlyData.reduce((a, b) => a + b, 0) / monthlyData.length;
             document.getElementById('monthly-avg').textContent = `${Math.round(monthlyAvg)}%`;
             document.getElementById('monthly-days').textContent = monthDates.length;
             
+            // Calculate best streak for monthly
             let bestStreak = 0;
             let currentStreak = 0;
             for (const percent of monthlyData) {
@@ -572,6 +602,7 @@ class DashboardApp {
             }
             document.getElementById('monthly-best').textContent = bestStreak;
             
+            // Calculate distribution for monthly chart
             const complete = monthlyData.filter(p => p >= 90).length;
             const partial = monthlyData.filter(p => p >= 50 && p < 90).length;
             const missed = monthlyData.filter(p => p < 50).length;
@@ -579,6 +610,7 @@ class DashboardApp {
             this.charts.monthlyDistribution.data.datasets[0].data = [complete, partial, missed];
             this.charts.monthlyDistribution.update();
             
+            // Update monthly trend chart (weekly averages within month)
             const weeklyAverages = [0, 0, 0, 0];
             monthDates.forEach(dateStr => {
                 const date = new Date(dateStr);
@@ -602,15 +634,18 @@ class DashboardApp {
         heatmap.innerHTML = '';
         const history = JSON.parse(localStorage.getItem('dashboardHistory') || '{}');
         
+        // Get current month and year
         const now = new Date();
         const year = now.getFullYear();
         const month = now.getMonth();
         
+        // Get first day of month and total days
         const firstDay = new Date(year, month, 1);
         const lastDay = new Date(year, month + 1, 0);
         const totalDays = lastDay.getDate();
         
-        const startDay = firstDay.getDay();
+        // Add empty cells for days before the 1st
+        const startDay = firstDay.getDay(); // 0 = Sunday, 1 = Monday, etc.
         for (let i = 0; i < startDay; i++) {
             const emptyCell = document.createElement('div');
             emptyCell.className = 'heatmap-day';
@@ -618,14 +653,17 @@ class DashboardApp {
             heatmap.appendChild(emptyCell);
         }
         
+        // Create cells for each day of the month
         for (let day = 1; day <= totalDays; day++) {
             const dayElement = document.createElement('div');
             dayElement.className = 'heatmap-day';
             dayElement.textContent = day;
             
+            // Create date string
             const date = new Date(year, month, day);
             const dateStr = this.formatDate(date);
             
+            // Find if we have data for this day
             if (dates.includes(dateStr)) {
                 const data = history[dateStr];
                 const completed = data.morningRoutine.filter(r => r.completed).length;
@@ -640,6 +678,7 @@ class DashboardApp {
                     dayElement.classList.add('missed');
                 }
                 
+                // Add tooltip
                 dayElement.title = `${dateStr}: ${percentage}% complete`;
             }
             
@@ -659,6 +698,7 @@ class DashboardApp {
         const percentage = Math.round((completedCount / total) * 100);
         const insights = document.getElementById('daily-insights');
         
+        // Always show insights, even if no data
         let insightText = '';
         
         if (completedCount === 0) {
@@ -722,6 +762,7 @@ class DashboardApp {
             `;
         }
         
+        // Add consumption insights
         if (this.state.consumption.water >= this.settings.waterTarget) {
             insightText += `
                 <div class="insight-item positive">
@@ -745,6 +786,7 @@ class DashboardApp {
             `;
         }
         
+        // Add archery insights
         if (this.state.archery.length > 0) {
             insightText += `
                 <div class="insight-item positive">
@@ -761,6 +803,7 @@ class DashboardApp {
             `;
         }
         
+        // Add self-care insights
         const selfCareCount = (this.state.selfCare.hair ? 1 : 0) + (this.state.selfCare.face ? 1 : 0);
         if (selfCareCount === 2) {
             insightText += `
@@ -813,6 +856,7 @@ class DashboardApp {
             
             const average = Math.round(weeklyData.reduce((a, b) => a + b, 0) / weeklyData.length);
             
+            // Calculate streak
             let streak = 0;
             for (let i = weeklyData.length - 1; i >= 0; i--) {
                 if (weeklyData[i] >= 50) {
@@ -913,6 +957,7 @@ class DashboardApp {
             
             const average = Math.round(monthlyData.reduce((a, b) => a + b, 0) / monthlyData.length);
             
+            // Calculate best streak
             let bestStreak = 0;
             let currentStreak = 0;
             for (const percent of monthlyData) {
@@ -927,10 +972,11 @@ class DashboardApp {
             const totalArchery = monthDates.reduce((sum, date) => sum + (history[date]?.archery.length || 0), 0);
             const totalWater = monthDates.reduce((sum, date) => sum + (history[date]?.consumption.water || 0), 0);
             
+            // Calculate distribution
             const complete = monthlyData.filter(p => p >= 90).length;
             const partial = monthlyData.filter(p => p >= 50 && p < 90).length;
             const missed = monthlyData.filter(p => p > 0 && p < 50).length;
-            const empty = new Date().getDate() - monthDates.length;
+            const empty = new Date().getDate() - monthDates.length; // Days not tracked
             
             if (average >= 80) {
                 insightText = `
@@ -986,6 +1032,7 @@ class DashboardApp {
         const modal = document.getElementById('download-modal');
         modal.classList.add('show');
         
+        // Set default dates
         const today = new Date();
         const lastWeek = new Date();
         lastWeek.setDate(lastWeek.getDate() - 7);
@@ -1019,7 +1066,7 @@ class DashboardApp {
 
     loadHistoryView() {
         const history = JSON.parse(localStorage.getItem('dashboardHistory') || '{}');
-        const dates = Object.keys(history).sort().reverse();
+        const dates = Object.keys(history).sort().reverse(); // Most recent first
         const container = document.getElementById('history-list');
         
         if (dates.length === 0) {
@@ -1073,6 +1120,7 @@ class DashboardApp {
         
         container.innerHTML = historyHTML;
         
+        // Add click handlers for detailed views
         container.querySelectorAll('.history-stat').forEach(stat => {
             stat.addEventListener('click', (e) => {
                 const date = e.currentTarget.dataset.date;
@@ -1158,10 +1206,12 @@ class DashboardApp {
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF('p', 'mm', 'a4');
         
+        // Add title
         doc.setFontSize(20);
         doc.setTextColor(59, 130, 246);
         doc.text('Discipline OS - Personal Dashboard Report', 105, 20, { align: 'center' });
         
+        // Add Malayalam quote
         doc.setFontSize(10);
         doc.setTextColor(100, 100, 100);
         doc.text('അവിവേകത്തിന്റെ അപൂർണ്ണമായ പ്രത്യക്ഷത', 105, 28, { align: 'center' });
@@ -1169,6 +1219,7 @@ class DashboardApp {
         doc.setFontSize(12);
         doc.setTextColor(100, 100, 100);
         
+        // Add report type and date
         const reportDate = new Date().toLocaleDateString('en-US', {
             weekday: 'long',
             year: 'numeric',
@@ -1189,16 +1240,19 @@ class DashboardApp {
         doc.text(`Date Range: ${selectedDate || 'Custom Range'}`, 20, 47);
         doc.text(`Generated: ${reportDate}`, 20, 54);
         
+        // Get data based on report type
         const history = JSON.parse(localStorage.getItem('dashboardHistory') || '{}');
         let dates = [];
         
         if (type === 'daily' && selectedDate) {
             dates = [selectedDate];
         } else if (type === 'weekly' && selectedDate) {
+            // Parse week number and get dates for that week
             const year = parseInt(selectedDate.split('-')[0]);
             const week = parseInt(selectedDate.split('W')[1]);
             dates = this.getDatesForWeek(year, week);
         } else if (type === 'monthly' && selectedDate) {
+            // Parse month and get dates for that month
             const year = parseInt(selectedDate.split('-')[0]);
             const month = parseInt(selectedDate.split('-')[1]) - 1;
             dates = this.getDatesForMonth(year, month);
@@ -1208,6 +1262,7 @@ class DashboardApp {
             dates = this.getDatesInRange(startDate, endDate);
         }
         
+        // Filter dates that have data
         const filteredDates = dates.filter(date => history[date]);
         
         if (filteredDates.length === 0) {
@@ -1215,6 +1270,7 @@ class DashboardApp {
         } else {
             let yPos = 70;
             
+            // Add summary section
             doc.setFontSize(16);
             doc.setTextColor(30, 41, 59);
             doc.text('Executive Summary', 20, yPos);
@@ -1227,6 +1283,7 @@ class DashboardApp {
             doc.text(summaryText, 20, yPos, { maxWidth: 170 });
             yPos += 15;
             
+            // Add detailed data for each day
             filteredDates.forEach(dateStr => {
                 if (yPos > 250) {
                     doc.addPage();
@@ -1238,6 +1295,7 @@ class DashboardApp {
                 const total = this.settings.routineTarget || 7;
                 const percentage = Math.round((completedCount / total) * 100);
                 
+                // Day header
                 doc.setFontSize(14);
                 doc.setTextColor(30, 41, 59);
                 doc.text(`${this.formatDateDisplay(new Date(dateStr))} (${percentage}%)`, 20, yPos);
@@ -1246,6 +1304,7 @@ class DashboardApp {
                 doc.setFontSize(11);
                 doc.setTextColor(100, 100, 100);
                 
+                // Morning Routine
                 doc.text('Morning Routine:', 25, yPos);
                 yPos += 6;
                 data.morningRoutine.forEach((item, index) => {
@@ -1256,6 +1315,7 @@ class DashboardApp {
                 });
                 yPos += 3;
                 
+                // Consumption
                 doc.text('Consumption:', 25, yPos);
                 yPos += 6;
                 doc.text(`• Water: ${data.consumption.water} glasses`, 30, yPos);
@@ -1265,6 +1325,7 @@ class DashboardApp {
                 doc.text(`• Tea: ${data.consumption.tea} cups`, 30, yPos);
                 yPos += 3;
                 
+                // Archery Sessions
                 doc.text('Archery Sessions:', 25, yPos);
                 yPos += 6;
                 if (data.archery.length === 0) {
@@ -1279,6 +1340,7 @@ class DashboardApp {
                 }
                 yPos += 3;
                 
+                // Self-Care
                 doc.text('Self-Care:', 25, yPos);
                 yPos += 6;
                 doc.text(`• Hair Care: ${data.selfCare.hair ? 'Completed' : 'Not completed'}`, 30, yPos);
@@ -1286,12 +1348,14 @@ class DashboardApp {
                 doc.text(`• Face Care: ${data.selfCare.face ? 'Completed' : 'Not completed'}`, 30, yPos);
                 yPos += 10;
                 
+                // Add separator line
                 if (yPos < 280) {
                     doc.line(20, yPos, 190, yPos);
                     yPos += 10;
                 }
             });
             
+            // Add insights section
             if (yPos > 250) {
                 doc.addPage();
                 yPos = 20;
@@ -1317,6 +1381,7 @@ class DashboardApp {
             doc.text(insights, 20, yPos, { maxWidth: 170 });
         }
         
+        // Save the PDF
         const fileName = `DisciplineOS_${type}_Report_${this.formatDate(new Date())}.pdf`;
         doc.save(fileName);
         
@@ -1373,7 +1438,7 @@ class DashboardApp {
         document.getElementById('next-day-btn').addEventListener('click', () => this.navigateDate(1));
         document.getElementById('today-btn').addEventListener('click', () => this.goToToday());
 
-        // Morning routine toggles - FIXED: Removed duplicate updateUI()
+        // Morning routine toggles
         document.addEventListener('click', (e) => {
             if (e.target.matches('.toggle-switch') || e.target.matches('.toggle-label')) {
                 const checkbox = e.target.matches('.toggle-switch') ? e.target : document.getElementById(e.target.getAttribute('for'));
@@ -1383,21 +1448,23 @@ class DashboardApp {
                     if (item) {
                         this.showUndoToast('toggleRoutine', { id: item.id, type: 'routine' });
                         item.completed = !item.completed;
-                        this.saveHistory(); // This calls updateUI()
+                        this.saveHistory();
+                        this.updateUI();
                         this.generateReports();
                     }
                 }
             }
         });
 
-        // Consumption buttons - FIXED: Removed duplicate updateUI()
+        // Consumption buttons
         document.addEventListener('click', (e) => {
             if (e.target.matches('.btn-increment, .btn-increment *')) {
                 const btn = e.target.closest('.btn-increment');
                 const type = btn.dataset.type;
                 this.showUndoToast('increment', { type: type });
                 this.state.consumption[type]++;
-                this.saveHistory(); // This calls updateUI()
+                this.saveHistory();
+                this.updateUI();
                 this.generateReports();
             } else if (e.target.matches('.btn-decrement, .btn-decrement *')) {
                 const btn = e.target.closest('.btn-decrement');
@@ -1405,13 +1472,14 @@ class DashboardApp {
                 if (this.state.consumption[type] > 0) {
                     this.showUndoToast('decrement', { type: type });
                     this.state.consumption[type]--;
-                    this.saveHistory(); // This calls updateUI()
+                    this.saveHistory();
+                    this.updateUI();
                     this.generateReports();
                 }
             }
         });
 
-        // Archery buttons - FIXED: Removed duplicate updateUI()
+        // Archery buttons
         document.addEventListener('click', (e) => {
             if (e.target.matches('.archery-btn, .archery-btn *')) {
                 const btn = e.target.closest('.archery-btn');
@@ -1423,7 +1491,8 @@ class DashboardApp {
                 };
                 this.showUndoToast('addArchery', activity);
                 this.state.archery.push(activity);
-                this.saveHistory(); // This calls updateUI()
+                this.saveHistory();
+                this.updateUI();
                 this.generateReports();
             } else if (e.target.matches('.btn-remove, .btn-remove *')) {
                 const btn = e.target.closest('.btn-remove');
@@ -1432,19 +1501,21 @@ class DashboardApp {
                 if (activity) {
                     this.showUndoToast('removeArchery', activity);
                     this.state.archery = this.state.archery.filter(a => a.id !== id);
-                    this.saveHistory(); // This calls updateUI()
+                    this.saveHistory();
+                    this.updateUI();
                     this.generateReports();
                 }
             }
         });
 
-        // Self-care toggles - FIXED: Removed duplicate updateUI()
+        // Self-care toggles
         document.addEventListener('change', (e) => {
             if (e.target.id === 'hair-care' || e.target.id === 'face-care') {
                 const type = e.target.id.replace('-care', '');
                 this.showUndoToast('toggleSelfCare', { type: type });
                 this.state.selfCare[type] = !this.state.selfCare[type];
-                this.saveHistory(); // This calls updateUI()
+                this.saveHistory();
+                this.updateUI();
                 this.generateReports();
             }
         });
@@ -1454,9 +1525,11 @@ class DashboardApp {
             tab.addEventListener('click', (e) => {
                 const period = e.target.dataset.period;
                 
+                // Update active tab
                 document.querySelectorAll('.report-tab').forEach(t => t.classList.remove('active'));
                 e.target.classList.add('active');
                 
+                // Show selected report
                 document.querySelectorAll('.report-section').forEach(section => {
                     section.classList.remove('active');
                 });
@@ -1464,11 +1537,12 @@ class DashboardApp {
             });
         });
 
-        // Reset consumption - FIXED: Removed duplicate updateUI()
+        // Reset consumption
         document.getElementById('reset-consumption').addEventListener('click', () => {
             if (confirm('Reset all consumption counters to zero?')) {
                 this.state.consumption = { water: 0, coffee: 0, tea: 0 };
-                this.saveHistory(); // This calls updateUI()
+                this.saveHistory();
+                this.updateUI();
                 this.generateReports();
             }
         });
@@ -1601,4 +1675,109 @@ class DashboardApp {
 
         // Generate PDF button
         document.getElementById('generate-pdf').addEventListener('click', () => {
-            const reportType = document.getElementById('report-type
+            const reportType = document.getElementById('report-type').value;
+            this.generatePDFReport(reportType);
+            document.getElementById('download-modal').classList.remove('show');
+        });
+
+        // Report type change
+        document.getElementById('report-type').addEventListener('change', (e) => {
+            const type = e.target.value;
+            
+            // Show/hide options based on report type
+            document.getElementById('daily-date-group').style.display = 
+                type === 'daily' ? 'block' : 'none';
+            document.getElementById('weekly-calendar-group').style.display = 
+                type === 'weekly' ? 'block' : 'none';
+            document.getElementById('monthly-calendar-group').style.display = 
+                type === 'monthly' ? 'block' : 'none';
+            document.getElementById('date-range-group').style.display = 
+                type === 'custom' ? 'block' : 'none';
+        });
+
+        // Detailed view clicks in analytics
+        document.getElementById('daily-routine-stat').addEventListener('click', () => {
+            const completedCount = this.state.morningRoutine.filter(r => r.completed).length;
+            const total = this.settings.routineTarget || 7;
+            let content = `<div class="detailed-view">`;
+            
+            this.state.morningRoutine.slice(0, total).forEach(item => {
+                content += `
+                    <div class="detailed-item">
+                        <span>${item.time} - ${item.activity}</span>
+                        <strong>${item.completed ? '✓ Completed' : '✗ Pending'}</strong>
+                    </div>
+                `;
+            });
+            
+            content += `<div class="detailed-item">
+                <span>Overall Completion</span>
+                <strong>${completedCount}/${total} (${Math.round((completedCount/total)*100)}%)</strong>
+            </div>`;
+            content += `</div>`;
+            this.showDetailModal('Today\'s Morning Routine', content);
+        });
+
+        document.getElementById('daily-consumption-stat').addEventListener('click', () => {
+            const content = `
+                <div class="detailed-view">
+                    <div class="detailed-item">
+                        <span>Water</span>
+                        <strong>${this.state.consumption.water} glasses (Target: ${this.settings.waterTarget})</strong>
+                    </div>
+                    <div class="detailed-item">
+                        <span>Coffee</span>
+                        <strong>${this.state.consumption.coffee} cups (Target: ${this.settings.coffeeTarget})</strong>
+                    </div>
+                    <div class="detailed-item">
+                        <span>Tea</span>
+                        <strong>${this.state.consumption.tea} cups (Target: ${this.settings.teaTarget})</strong>
+                    </div>
+                    <div class="detailed-item">
+                        <span>Total Consumption</span>
+                        <strong>${this.state.consumption.water + this.state.consumption.coffee + this.state.consumption.tea} items</strong>
+                    </div>
+                </div>
+            `;
+            this.showDetailModal('Today\'s Consumption', content);
+        });
+
+        document.getElementById('daily-archery-stat').addEventListener('click', () => {
+            if (this.state.archery.length === 0) {
+                this.showDetailModal('Today\'s Archery Sessions', '<p>No archery sessions recorded today.</p>');
+            } else {
+                let content = `<div class="detailed-view">`;
+                
+                this.state.archery.forEach(session => {
+                    const time = new Date(session.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                    content += `
+                        <div class="detailed-item">
+                            <span>${this.formatArcheryType(session.type)}</span>
+                            <strong>${time}</strong>
+                        </div>
+                    `;
+                });
+                
+                content += `<div class="detailed-item">
+                    <span>Total Sessions Today</span>
+                    <strong>${this.state.archery.length}</strong>
+                </div>`;
+                content += `</div>`;
+                this.showDetailModal('Today\'s Archery Sessions', content);
+            }
+        });
+
+        // Close modals when clicking outside
+        window.addEventListener('click', (e) => {
+            if (e.target.classList.contains('modal')) {
+                e.target.classList.remove('show');
+            }
+        });
+    }
+}
+
+// Initialize the app
+let app;
+document.addEventListener('DOMContentLoaded', () => {
+    app = new DashboardApp();
+});
