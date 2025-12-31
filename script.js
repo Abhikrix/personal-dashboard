@@ -1438,88 +1438,86 @@ class DashboardApp {
         document.getElementById('next-day-btn').addEventListener('click', () => this.navigateDate(1));
         document.getElementById('today-btn').addEventListener('click', () => this.goToToday());
 
-        // Morning routine toggles
-        document.addEventListener('click', (e) => {
-            if (e.target.matches('.toggle-switch') || e.target.matches('.toggle-label')) {
-                const checkbox = e.target.matches('.toggle-switch') ? e.target : document.getElementById(e.target.getAttribute('for'));
-                if (checkbox && checkbox.dataset.id) {
-                    const id = parseInt(checkbox.dataset.id);
-                    const item = this.state.morningRoutine.find(r => r.id === id);
-                    if (item) {
-                        this.showUndoToast('toggleRoutine', { id: item.id, type: 'routine' });
-                        item.completed = !item.completed;
-                        this.saveHistory();
-                        this.updateUI();
-                        this.generateReports();
-                    }
-                }
+// Morning routine toggles
+document.addEventListener('click', (e) => {
+    if (e.target.matches('.toggle-switch') || e.target.matches('.toggle-label')) {
+        const checkbox = e.target.matches('.toggle-switch') ? e.target : document.getElementById(e.target.getAttribute('for'));
+        if (checkbox && checkbox.dataset.id) {
+            const id = parseInt(checkbox.dataset.id);
+            const item = this.state.morningRoutine.find(r => r.id === id);
+            if (item) {
+                this.showUndoToast('toggleRoutine', { id: item.id, type: 'routine' });
+                item.completed = !item.completed;
+                this.saveHistory();
+                // REMOVED: this.updateUI(); // Not needed since saveHistory calls it
+                this.generateReports();
             }
-        });
+        }
+    }
+});
 
         // Consumption buttons
-        document.addEventListener('click', (e) => {
-            if (e.target.matches('.btn-increment, .btn-increment *')) {
-                const btn = e.target.closest('.btn-increment');
-                const type = btn.dataset.type;
-                this.showUndoToast('increment', { type: type });
-                this.state.consumption[type]++;
-                this.saveHistory();
-                this.updateUI();
-                this.generateReports();
-            } else if (e.target.matches('.btn-decrement, .btn-decrement *')) {
-                const btn = e.target.closest('.btn-decrement');
-                const type = btn.dataset.type;
-                if (this.state.consumption[type] > 0) {
-                    this.showUndoToast('decrement', { type: type });
-                    this.state.consumption[type]--;
-                    this.saveHistory();
-                    this.updateUI();
-                    this.generateReports();
-                }
-            }
-        });
+document.addEventListener('click', (e) => {
+    if (e.target.matches('.btn-increment, .btn-increment *')) {
+        const btn = e.target.closest('.btn-increment');
+        const type = btn.dataset.type;
+        this.showUndoToast('increment', { type: type });
+        this.state.consumption[type]++;
+        this.saveHistory();
+        // REMOVED: this.updateUI(); // Not needed since saveHistory calls it
+        this.generateReports();
+    } else if (e.target.matches('.btn-decrement, .btn-decrement *')) {
+        const btn = e.target.closest('.btn-decrement');
+        const type = btn.dataset.type;
+        if (this.state.consumption[type] > 0) {
+            this.showUndoToast('decrement', { type: type });
+            this.state.consumption[type]--;
+            this.saveHistory();
+            // REMOVED: this.updateUI(); // Not needed since saveHistory calls it
+            this.generateReports();
+        }
+    }
+});
 
         // Archery buttons
-        document.addEventListener('click', (e) => {
-            if (e.target.matches('.archery-btn, .archery-btn *')) {
-                const btn = e.target.closest('.archery-btn');
-                const type = btn.dataset.type;
-                const activity = {
-                    id: Date.now(),
-                    type: type,
-                    timestamp: new Date().toISOString()
-                };
-                this.showUndoToast('addArchery', activity);
-                this.state.archery.push(activity);
-                this.saveHistory();
-                this.updateUI();
-                this.generateReports();
-            } else if (e.target.matches('.btn-remove, .btn-remove *')) {
-                const btn = e.target.closest('.btn-remove');
-                const id = parseInt(btn.dataset.id);
-                const activity = this.state.archery.find(a => a.id === id);
-                if (activity) {
-                    this.showUndoToast('removeArchery', activity);
-                    this.state.archery = this.state.archery.filter(a => a.id !== id);
-                    this.saveHistory();
-                    this.updateUI();
-                    this.generateReports();
-                }
-            }
-        });
-
+document.addEventListener('click', (e) => {
+    if (e.target.matches('.archery-btn, .archery-btn *')) {
+        const btn = e.target.closest('.archery-btn');
+        const type = btn.dataset.type;
+        const activity = {
+            id: Date.now(),
+            type: type,
+            timestamp: new Date().toISOString()
+        };
+        this.showUndoToast('addArchery', activity);
+        this.state.archery.push(activity);
+        this.saveHistory();
+        // REMOVED: this.updateUI(); // Not needed since saveHistory calls it
+        this.generateReports();
+    } else if (e.target.matches('.btn-remove, .btn-remove *')) {
+        const btn = e.target.closest('.btn-remove');
+        const id = parseInt(btn.dataset.id);
+        const activity = this.state.archery.find(a => a.id === id);
+        if (activity) {
+            this.showUndoToast('removeArchery', activity);
+            this.state.archery = this.state.archery.filter(a => a.id !== id);
+            this.saveHistory();
+            // REMOVED: this.updateUI(); // Not needed since saveHistory calls it
+            this.generateReports();
+        }
+    }
+});
         // Self-care toggles
-        document.addEventListener('change', (e) => {
-            if (e.target.id === 'hair-care' || e.target.id === 'face-care') {
-                const type = e.target.id.replace('-care', '');
-                this.showUndoToast('toggleSelfCare', { type: type });
-                this.state.selfCare[type] = !this.state.selfCare[type];
-                this.saveHistory();
-                this.updateUI();
-                this.generateReports();
-            }
-        });
-
+document.addEventListener('change', (e) => {
+    if (e.target.id === 'hair-care' || e.target.id === 'face-care') {
+        const type = e.target.id.replace('-care', '');
+        this.showUndoToast('toggleSelfCare', { type: type });
+        this.state.selfCare[type] = !this.state.selfCare[type];
+        this.saveHistory();
+        // REMOVED: this.updateUI(); // Not needed since saveHistory calls it
+        this.generateReports();
+    }
+});
         // Report tabs
         document.querySelectorAll('.report-tab').forEach(tab => {
             tab.addEventListener('click', (e) => {
@@ -1538,14 +1536,14 @@ class DashboardApp {
         });
 
         // Reset consumption
-        document.getElementById('reset-consumption').addEventListener('click', () => {
-            if (confirm('Reset all consumption counters to zero?')) {
-                this.state.consumption = { water: 0, coffee: 0, tea: 0 };
-                this.saveHistory();
-                this.updateUI();
-                this.generateReports();
-            }
-        });
+document.getElementById('reset-consumption').addEventListener('click', () => {
+    if (confirm('Reset all consumption counters to zero?')) {
+        this.state.consumption = { water: 0, coffee: 0, tea: 0 };
+        this.saveHistory();
+        // REMOVED: this.updateUI(); // Not needed since saveHistory calls it
+        this.generateReports();
+    }
+});
 
         // Download button
         document.getElementById('download-btn').addEventListener('click', () => {
@@ -1780,4 +1778,21 @@ class DashboardApp {
 let app;
 document.addEventListener('DOMContentLoaded', () => {
     app = new DashboardApp();
+saveHistory() {
+    const history = JSON.parse(localStorage.getItem('dashboardHistory') || '{}');
+    const dateStr = this.formatDate(this.currentDate);
+    
+    history[dateStr] = {
+        morningRoutine: this.state.morningRoutine,
+        consumption: this.state.consumption,
+        archery: this.state.archery,
+        selfCare: this.state.selfCare,
+        timestamp: new Date().toISOString()
+    };
+    
+    localStorage.setItem('dashboardHistory', JSON.stringify(history));
+    
+    // ADD THIS LINE - Update charts and reports immediately
+    this.updateUI(); // This will refresh everything
+}
 });
