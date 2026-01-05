@@ -59,10 +59,11 @@ body {
     justify-content: space-between;
     gap: 15px;
     box-shadow: var(--shadow-lg);
-    z-index: 1000;
+    z-index: 9999;
     transform: translateY(-100%);
     opacity: 0;
     transition: all 0.3s ease;
+    display: none;
 }
 
 @media (min-width: 768px) {
@@ -77,6 +78,7 @@ body {
 .undo-toast.show {
     transform: translateY(0);
     opacity: 1;
+    display: flex !important;
 }
 
 .undo-btn {
@@ -111,10 +113,13 @@ body {
     padding: 12px;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
+    backdrop-filter: blur(2px);
 }
 
 .modal.show {
-    display: flex;
+    display: flex !important;
+    opacity: 1 !important;
+    visibility: visible !important;
 }
 
 .modal-content {
@@ -210,6 +215,8 @@ body {
     font-size: 18px;
     flex-shrink: 0;
     transition: background 0.2s;
+    user-select: none;
+    -webkit-user-select: none;
 }
 
 .nav-btn:hover {
@@ -380,6 +387,14 @@ body {
     }
 }
 
+@media (max-width: 640px) {
+    .header-controls {
+        justify-content: flex-start;
+        overflow-x: auto;
+        padding-bottom: 8px;
+    }
+}
+
 .btn-icon {
     background: var(--gray-50);
     border: 2px solid var(--gray-200);
@@ -394,6 +409,8 @@ body {
     font-size: 18px;
     transition: all 0.2s;
     flex-shrink: 0;
+    user-select: none;
+    -webkit-user-select: none;
 }
 
 .btn-icon:hover {
@@ -454,6 +471,8 @@ body {
     display: flex;
     flex-direction: column;
     transition: transform 0.2s, box-shadow 0.2s;
+    min-height: 0;
+    overflow: hidden;
 }
 
 .dashboard-card:hover {
@@ -512,6 +531,8 @@ body {
     color: var(--gray-500);
     transition: all 0.2s;
     white-space: nowrap;
+    user-select: none;
+    -webkit-user-select: none;
 }
 
 .report-tab.active {
@@ -534,6 +555,11 @@ body {
     .chart-container {
         height: 300px;
     }
+}
+
+.chart-container canvas {
+    width: 100% !important;
+    height: 100% !important;
 }
 
 .charts-grid {
@@ -644,6 +670,7 @@ body {
     grid-template-columns: repeat(7, 1fr);
     gap: 4px;
     margin: 16px 0;
+    min-height: 200px;
 }
 
 @media (max-width: 640px) {
@@ -664,6 +691,8 @@ body {
     position: relative;
     cursor: pointer;
     transition: transform 0.2s;
+    min-width: 24px;
+    min-height: 24px;
 }
 
 @media (max-width: 640px) {
@@ -1182,6 +1211,8 @@ body {
     cursor: pointer;
     transition: all 0.2s;
     gap: 8px;
+    user-select: none;
+    -webkit-user-select: none;
 }
 
 .archery-btn:hover {
@@ -1356,6 +1387,10 @@ body {
     text-align: center;
     padding: 40px 20px;
     color: var(--gray-400);
+    display: flex !important;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
 }
 
 .no-data i {
@@ -1449,5 +1484,30 @@ body {
     
     .consumption-count {
         font-size: 22px;
+    }
+}
+
+/* iOS Safari input fixes */
+input[type="date"],
+input[type="week"],
+input[type="month"],
+input[type="number"] {
+    -webkit-appearance: none;
+    appearance: none;
+}
+
+/* Touch device optimizations */
+@media (hover: none) and (pointer: coarse) {
+    .btn-icon,
+    .nav-btn,
+    .archery-btn,
+    .report-tab {
+        min-height: 44px;
+        min-width: 44px;
+    }
+    
+    .consumption-controls button {
+        min-width: 44px;
+        min-height: 44px;
     }
 }
