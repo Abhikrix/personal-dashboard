@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Discipline OS | Personal Dashboard</title>
+    <title>Cartography of Days | Personal Dashboard</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Kalam:wght@300;400;700&display=swap" rel="stylesheet">
@@ -14,7 +14,7 @@
     <!-- Custom CSS -->
     <link rel="stylesheet" href="style.css">
     <!-- Favicon -->
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎯</text></svg>">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🗺️</text></svg>">
 </head>
 <body>
     <!-- Toast Notification -->
@@ -126,7 +126,7 @@
                 </div>
                 
                 <div class="settings-group">
-                    <label class="settings-label">Daily Tea Target (cups):</label>
+                    <label class="selfcare-label">Daily Tea Target (cups):</label>
                     <input type="number" id="tea-target" class="settings-input" min="0" max="10" value="1">
                 </div>
                 
@@ -148,15 +148,56 @@
         </div>
     </div>
 
+    <!-- Lecture Attendance Modal -->
+    <div id="lecture-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title"><i class="fas fa-chalkboard-teacher"></i> Add Lecture Attendance</h2>
+                <button class="close-modal" id="close-lecture-modal">&times;</button>
+            </div>
+            <div class="lecture-form">
+                <div class="option-group">
+                    <label class="option-label">Select Lecturer:</label>
+                    <select id="lecturer-select" class="option-select">
+                        <option value="LSN">LSN</option>
+                        <option value="RK">RK</option>
+                        <option value="PR">PR</option>
+                        <option value="BM">BM</option>
+                        <option value="BKR">BKR</option>
+                        <option value="SDG">SDG</option>
+                        <option value="MSB">MSB</option>
+                        <option value="AS">AS</option>
+                        <option value="PP">PP</option>
+                    </select>
+                </div>
+                <div class="option-group">
+                    <label class="option-label">Hours Attended:</label>
+                    <input type="number" id="lecture-hours" class="option-select" min="0.5" max="8" step="0.5" value="1">
+                </div>
+                <div class="option-group">
+                    <label class="option-label">Date:</label>
+                    <input type="date" id="lecture-date" class="option-select" value="">
+                </div>
+                <div class="option-group">
+                    <label class="option-label">Subject/Topic:</label>
+                    <input type="text" id="lecture-topic" class="option-select" placeholder="Optional: Enter subject or topic">
+                </div>
+                <button id="save-lecture" class="download-btn">
+                    <i class="fas fa-save"></i> Save Attendance
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- Main Container -->
     <div class="app-container">
         <!-- Header -->
         <header class="app-header">
             <div class="header-left">
                 <div class="app-title">
-                    <i class="fas fa-compass"></i>
+                    <i class="fas fa-map"></i>
                     <div>
-                        <h1>Discipline OS</h1>
+                        <h1>Cartography of Days</h1>
                         <span class="malayalam-quote">അവിവേകത്തിന്റെ അപൂർണ്ണമായ പ്രത്യക്ഷത</span>
                     </div>
                 </div>
@@ -299,6 +340,34 @@
                 </div>
             </section>
 
+            <!-- College Lecture Attendance -->
+            <section class="dashboard-card card-wide">
+                <div class="card-header">
+                    <h2><i class="fas fa-university"></i> College Lectures</h2>
+                    <button class="btn-reset" id="add-lecture">Add Attendance</button>
+                </div>
+                <div class="lecture-summary">
+                    <div class="lecture-today">
+                        <h3>Today's Lectures</h3>
+                        <div class="lecture-hours" id="today-lecture-hours">0 hours</div>
+                        <div class="lecture-count" id="today-lecture-count">0 lectures</div>
+                    </div>
+                    <div class="lecture-stats">
+                        <div class="lecture-stat">
+                            <div class="lecture-stat-value" id="weekly-lecture-hours">0</div>
+                            <div class="lecture-stat-label">This Week</div>
+                        </div>
+                        <div class="lecture-stat">
+                            <div class="lecture-stat-value" id="monthly-lecture-hours">0</div>
+                            <div class="lecture-stat-label">This Month</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="lecture-list" id="lecture-list">
+                    <!-- Will be filled by JavaScript -->
+                </div>
+            </section>
+
             <!-- Archery -->
             <section class="dashboard-card">
                 <div class="card-header">
@@ -369,6 +438,7 @@
                         <button class="report-tab active" data-period="daily">Daily</button>
                         <button class="report-tab" data-period="weekly">Weekly</button>
                         <button class="report-tab" data-period="monthly">Monthly</button>
+                        <button class="report-tab" data-period="lectures">Lectures</button>
                     </div>
                 </div>
 
@@ -460,13 +530,52 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- Lecture Report -->
+                <div class="report-section" id="lecture-report">
+                    <div class="summary-stats">
+                        <div class="summary-stat">
+                            <div class="summary-stat-value" id="total-lecture-hours">0</div>
+                            <div class="summary-stat-label">Total Hours</div>
+                        </div>
+                        <div class="summary-stat">
+                            <div class="summary-stat-value" id="total-lectures">0</div>
+                            <div class="summary-stat-label">Lectures Attended</div>
+                        </div>
+                        <div class="summary-stat">
+                            <div class="summary-stat-value" id="avg-lecture-hours">0</div>
+                            <div class="summary-stat-label">Avg Hours/Day</div>
+                        </div>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="lecture-chart"></canvas>
+                    </div>
+                    <div class="lecture-stats-grid">
+                        <div class="lecturer-distribution">
+                            <h3>Hours by Lecturer</h3>
+                            <div id="lecturer-stats">
+                                <!-- Will be filled by JavaScript -->
+                            </div>
+                        </div>
+                        <div class="lecture-trend">
+                            <h3>Weekly Trend</h3>
+                            <canvas id="lecture-trend-chart"></canvas>
+                        </div>
+                    </div>
+                    <div class="insights-container">
+                        <h3>Lecture Analysis</h3>
+                        <div id="lecture-insights">
+                            <!-- Insights will be populated by JavaScript -->
+                        </div>
+                    </div>
+                </div>
             </section>
         </main>
 
         <!-- Footer -->
         <footer class="app-footer">
             <div class="footer-content">
-                <p>Discipline OS • Personal Dashboard v3.0</p>
+                <p>Cartography of Days • Personal Dashboard v3.1 • ഒരു സംഗ്രഹം : അഭികൃഷ്ണൻ</p>
                 <div class="footer-links">
                     <button id="settings-btn-footer">Settings</button>
                 </div>
