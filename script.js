@@ -11,18 +11,22 @@ class DashboardApp {
     getInitialState() {
         const saved = localStorage.getItem('dashboardHistory');
         if (saved) {
-            const history = JSON.parse(saved);
-            const today = this.formatDate(new Date());
-            
-            // If we have today's data, use it
-            if (history[today]) {
-                return {
-                    date: today,
-                    morningRoutine: history[today].morningRoutine || this.getDefaultRoutine(),
-                    consumption: history[today].consumption || { water: 0, coffee: 0, tea: 0 },
-                    archery: history[today].archery || [],
-                    selfCare: history[today].selfCare || { hair: false, face: false }
-                };
+            try {
+                const history = JSON.parse(saved);
+                const today = this.formatDate(new Date());
+                
+                // If we have today's data, use it
+                if (history[today]) {
+                    return {
+                        date: today,
+                        morningRoutine: history[today].morningRoutine || this.getDefaultRoutine(),
+                        consumption: history[today].consumption || { water: 0, coffee: 0, tea: 0 },
+                        archery: history[today].archery || [],
+                        selfCare: history[today].selfCare || { hair: false, face: false }
+                    };
+                }
+            } catch (e) {
+                console.error('Error parsing saved history:', e);
             }
         }
         
@@ -39,7 +43,11 @@ class DashboardApp {
     getSettings() {
         const saved = localStorage.getItem('dashboardSettings');
         if (saved) {
-            return JSON.parse(saved);
+            try {
+                return JSON.parse(saved);
+            } catch (e) {
+                console.error('Error parsing settings:', e);
+            }
         }
         return {
             routineTarget: 7,
@@ -50,7 +58,13 @@ class DashboardApp {
     }
 
     saveSettings() {
-        localStorage.setItem('dashboardSettings', JSON.stringify(this.settings));
+        try {
+            localStorage.setItem('dashboardSettings', JSON.stringify(this.settings));
+            return true;
+        } catch (e) {
+            console.error('Error saving settings:', e);
+            return false;
+        }
     }
 
     getDefaultRoutine() {
@@ -66,7 +80,10 @@ class DashboardApp {
     }
 
     formatDate(date) {
-        return date.toISOString().split('T')[0];
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
     }
 
     formatDateDisplay(date) {
@@ -89,23 +106,35 @@ class DashboardApp {
         this.updateUI();
         this.updateSettingsDisplay();
         this.generateReports();
+        
+        // Fix for chart rendering on mobile
+        setTimeout(() => {
+            this.updateCharts();
+        }, 100);
     }
 
     saveHistory() {
-        const history = JSON.parse(localStorage.getItem('dashboardHistory') || '{}');
-        const dateStr = this.formatDate(this.currentDate);
-        
-        history[dateStr] = {
-            morningRoutine: this.state.morningRoutine,
-            consumption: this.state.consumption,
-            archery: this.state.archery,
-            selfCare: this.state.selfCare,
-            timestamp: new Date().toISOString()
-        };
-        
-        localStorage.setItem('dashboardHistory', JSON.stringify(history));
-        this.updateCharts();
-        this.generateReports();
+        try {
+            const history = JSON.parse(localStorage.getItem('dashboardHistory') || '{}');
+            const dateStr = this.formatDate(this.currentDate);
+            
+            history[dateStr] = {
+                morningRoutine: this.state.morningRoutine,
+                consumption: this.state.consumption,
+                archery: this.state.archery,
+                selfCare: this.state.selfCare,
+                timestamp: new Date().toISOString()
+            };
+            
+            localStorage.setItem('dashboardHistory', JSON.stringify(history));
+            this.updateCharts();
+            this.generateReports();
+            return true;
+        } catch (e) {
+            console.error('Error saving history:', e);
+            alert('Error saving data. Please check browser storage permissions.');
+            return false;
+        }
     }
 
     loadDate(date) {
@@ -132,10 +161,12 @@ class DashboardApp {
         
         // Update date display
         document.getElementById('current-date-text').textContent = this.formatDateDisplay(date);
-        document.getElementById('current-date-display').textContent = dateStr === this.formatDate(new Date()) ? 'Today' : dateStr;
+        const today = this.formatDate(new Date());
+        document.getElementById('current-date-display').textContent = dateStr === today ? 'Today' : dateStr;
         
         this.updateUI();
         this.generateReports();
+        return true;
     }
 
     navigateDate(direction) {
@@ -171,11 +202,14 @@ class DashboardApp {
         message.textContent = messages[action] || 'Action completed';
         
         // Set undo action
-        undoBtn.onclick = () => {
+        const undoHandler = () => {
             this.undoAction(action, data);
             toast.classList.remove('show');
             setTimeout(() => toast.classList.add('hidden'), 300);
+            undoBtn.removeEventListener('click', undoHandler);
         };
+        
+        undoBtn.addEventListener('click', undoHandler);
         
         // Auto-hide after 5 seconds
         setTimeout(() => {
@@ -276,14 +310,21 @@ class DashboardApp {
             `${this.state.archery.length} session${this.state.archery.length !== 1 ? 's' : ''}`;
         
         // Update log
-        logContainer.innerHTML = this.state.archery.length === 0 
-            ? '<div style="text-align: center; color: #94a3b8; padding: 20px;">No activities logged today</div>'
-            : this.state.archery.map(activity => `
+        if (this.state.archery.length === 0) {
+            logContainer.innerHTML = `
+                <div class="no-data">
+                    <i class="fas fa-bullseye"></i>
+                    <p>No activities logged today</p>
+                </div>
+            `;
+        } else {
+            logContainer.innerHTML = this.state.archery.map(activity => `
                 <div class="archery-log-item">
                     <span>${this.formatArcheryType(activity.type)} - ${new Date(activity.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                    <button class="btn-remove" data-id="${activity.id}">×</button>
+                    <button class="btn-remove" data-id="${activity.id}" title="Remove activity">×</button>
                 </div>
             `).join('');
+        }
     }
 
     formatArcheryType(type) {
@@ -361,161 +402,189 @@ class DashboardApp {
     }
 
     setupCharts() {
+        // Destroy existing charts to prevent duplicates
+        if (this.charts.daily) this.charts.daily.destroy();
+        if (this.charts.weekly) this.charts.weekly.destroy();
+        if (this.charts.monthlyTrend) this.charts.monthlyTrend.destroy();
+        if (this.charts.monthlyDistribution) this.charts.monthlyDistribution.destroy();
+        
         // Daily Chart
-        this.charts.daily = new Chart(document.getElementById('daily-chart'), {
-            type: 'bar',
-            data: {
-                labels: ['Morning Routine', 'Water', 'Coffee', 'Tea', 'Archery', 'Self-Care'],
-                datasets: [{
-                    label: 'Today',
-                    data: [0, 0, 0, 0, 0, 0],
-                    backgroundColor: [
-                        '#3b82f6',
-                        '#06b6d4',
-                        '#8b5cf6',
-                        '#10b981',
-                        '#f59e0b',
-                        '#ec4899'
-                    ],
-                    borderColor: [
-                        '#2563eb',
-                        '#0891b2',
-                        '#7c3aed',
-                        '#059669',
-                        '#d97706',
-                        '#db2777'
-                    ],
-                    borderWidth: 2
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: { display: false },
-                    tooltip: {
-                        callbacks: {
-                            label: function(context) {
-                                const labels = ['% Complete', 'Glasses', 'Cups', 'Cups', 'Sessions', 'Complete'];
-                                return `${context.parsed.y} ${labels[context.dataIndex]}`;
+        const dailyCtx = document.getElementById('daily-chart');
+        if (dailyCtx) {
+            this.charts.daily = new Chart(dailyCtx, {
+                type: 'bar',
+                data: {
+                    labels: ['Morning Routine', 'Water', 'Coffee', 'Tea', 'Archery', 'Self-Care'],
+                    datasets: [{
+                        label: 'Today',
+                        data: [0, 0, 0, 0, 0, 0],
+                        backgroundColor: [
+                            '#3b82f6',
+                            '#06b6d4',
+                            '#8b5cf6',
+                            '#10b981',
+                            '#f59e0b',
+                            '#ec4899'
+                        ],
+                        borderColor: [
+                            '#2563eb',
+                            '#0891b2',
+                            '#7c3aed',
+                            '#059669',
+                            '#d97706',
+                            '#db2777'
+                        ],
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const labels = ['% Complete', 'Glasses', 'Cups', 'Cups', 'Sessions', 'Complete'];
+                                    return `${context.parsed.y} ${labels[context.dataIndex]}`;
+                                }
                             }
                         }
-                    }
-                },
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        max: 100,
-                        ticks: {
-                            callback: function(value) {
-                                return value + '%';
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 100,
+                            ticks: {
+                                callback: function(value) {
+                                    return value + '%';
+                                }
                             }
                         }
                     }
                 }
-            }
-        });
+            });
+        }
 
         // Weekly Chart
-        this.charts.weekly = new Chart(document.getElementById('weekly-chart'), {
-            type: 'line',
-            data: {
-                labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
-                datasets: [{
-                    label: 'Routine Completion',
-                    data: [0, 0, 0, 0, 0, 0, 0],
-                    borderColor: '#3b82f6',
-                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                    tension: 0.4,
-                    fill: true
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: { legend: { display: false } },
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        max: 100,
-                        ticks: {
-                            callback: function(value) {
-                                return value + '%';
+        const weeklyCtx = document.getElementById('weekly-chart');
+        if (weeklyCtx) {
+            this.charts.weekly = new Chart(weeklyCtx, {
+                type: 'line',
+                data: {
+                    labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+                    datasets: [{
+                        label: 'Routine Completion',
+                        data: [0, 0, 0, 0, 0, 0, 0],
+                        borderColor: '#3b82f6',
+                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                        tension: 0.4,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 100,
+                            ticks: {
+                                callback: function(value) {
+                                    return value + '%';
+                                }
                             }
                         }
                     }
                 }
-            }
-        });
+            });
+        }
 
         // Monthly Trend Chart
-        this.charts.monthlyTrend = new Chart(document.getElementById('monthly-trend-chart'), {
-            type: 'line',
-            data: {
-                labels: ['Week 1', 'Week 2', 'Week 3', 'Week 4'],
-                datasets: [{
-                    label: 'Weekly Average',
-                    data: [0, 0, 0, 0],
-                    borderColor: '#10b981',
-                    backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                    tension: 0.4,
-                    fill: true
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: { legend: { display: false } },
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        max: 100,
-                        ticks: {
-                            callback: function(value) {
-                                return value + '%';
+        const monthlyTrendCtx = document.getElementById('monthly-trend-chart');
+        if (monthlyTrendCtx) {
+            this.charts.monthlyTrend = new Chart(monthlyTrendCtx, {
+                type: 'line',
+                data: {
+                    labels: ['Week 1', 'Week 2', 'Week 3', 'Week 4'],
+                    datasets: [{
+                        label: 'Weekly Average',
+                        data: [0, 0, 0, 0],
+                        borderColor: '#10b981',
+                        backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                        tension: 0.4,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 100,
+                            ticks: {
+                                callback: function(value) {
+                                    return value + '%';
+                                }
                             }
                         }
                     }
                 }
-            }
-        });
+            });
+        }
 
         // Monthly Distribution Chart
-        this.charts.monthlyDistribution = new Chart(document.getElementById('monthly-distribution-chart'), {
-            type: 'doughnut',
-            data: {
-                labels: ['Complete', 'Partial', 'Missed'],
-                datasets: [{
-                    data: [0, 0, 0],
-                    backgroundColor: ['#10b981', '#f59e0b', '#ef4444'],
-                    borderWidth: 2,
-                    borderColor: 'white'
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: { legend: { position: 'bottom' } }
-            }
-        });
+        const monthlyDistCtx = document.getElementById('monthly-distribution-chart');
+        if (monthlyDistCtx) {
+            this.charts.monthlyDistribution = new Chart(monthlyDistCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Complete', 'Partial', 'Missed'],
+                    datasets: [{
+                        data: [0, 0, 0],
+                        backgroundColor: ['#10b981', '#f59e0b', '#ef4444'],
+                        borderWidth: 2,
+                        borderColor: 'white'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { 
+                        legend: { 
+                            position: 'bottom',
+                            labels: {
+                                padding: 20,
+                                usePointStyle: true
+                            }
+                        } 
+                    }
+                }
+            });
+        }
     }
 
     updateCharts() {
         const completedCount = this.state.morningRoutine.filter(r => r.completed).length;
         const total = this.settings.routineTarget || 7;
-        const percentage = Math.round((completedCount / total) * 100);
+        const percentage = total > 0 ? Math.round((completedCount / total) * 100) : 0;
         const selfCarePercent = ((this.state.selfCare.hair ? 1 : 0) + (this.state.selfCare.face ? 1 : 0)) * 50;
         
         // Update daily chart with actual data
-        this.charts.daily.data.datasets[0].data = [
-            percentage,
-            Math.min(this.state.consumption.water * (100 / this.settings.waterTarget), 100),
-            Math.min(this.state.consumption.coffee * (100 / this.settings.coffeeTarget), 100),
-            Math.min(this.state.consumption.tea * (100 / this.settings.teaTarget), 100),
-            Math.min(this.state.archery.length * 33.33, 100),
-            selfCarePercent
-        ];
-        this.charts.daily.update();
+        if (this.charts.daily) {
+            this.charts.daily.data.datasets[0].data = [
+                percentage,
+                Math.min(this.state.consumption.water * (100 / Math.max(this.settings.waterTarget, 1)), 100),
+                Math.min(this.state.consumption.coffee * (100 / Math.max(this.settings.coffeeTarget, 1)), 100),
+                Math.min(this.state.consumption.tea * (100 / Math.max(this.settings.teaTarget, 1)), 100),
+                Math.min(this.state.archery.length * 33.33, 100),
+                selfCarePercent
+            ];
+            this.charts.daily.update('none');
+        }
         
         // Update report stats
         document.getElementById('daily-routine-percent').textContent = `${percentage}%`;
@@ -526,111 +595,133 @@ class DashboardApp {
         const dates = Object.keys(history).sort();
         
         // Update weekly chart with actual data
-        const last7Dates = dates.slice(-7);
-        const weeklyData = [];
-        
-        // Get last 7 days or pad with zeros
-        for (let i = 6; i >= 0; i--) {
-            const date = new Date();
-            date.setDate(date.getDate() - i);
-            const dateStr = this.formatDate(date);
+        if (this.charts.weekly) {
+            const last7Dates = dates.slice(-7);
+            const weeklyData = [];
             
-            if (history[dateStr]) {
-                const data = history[dateStr];
-                const completed = data.morningRoutine.filter(r => r.completed).length;
-                const total = this.settings.routineTarget || 7;
-                weeklyData.push(Math.round((completed / total) * 100));
-            } else {
-                weeklyData.push(0);
-            }
-        }
-        
-        this.charts.weekly.data.datasets[0].data = weeklyData;
-        this.charts.weekly.update();
-        
-        // Update weekly stats
-        const weeklyAvg = weeklyData.reduce((a, b) => a + b, 0) / 7;
-        document.getElementById('weekly-avg-percent').textContent = `${Math.round(weeklyAvg)}%`;
-        document.getElementById('weekly-total').textContent = last7Dates.reduce((sum, date) => sum + (history[date]?.archery.length || 0), 0);
-        
-        // Calculate streak for weekly
-        let streak = 0;
-        for (let i = weeklyData.length - 1; i >= 0; i--) {
-            if (weeklyData[i] >= 50) {
-                streak++;
-            } else {
-                break;
-            }
-        }
-        document.getElementById('weekly-streak').textContent = streak;
-        
-        // Update monthly data
-        const currentMonth = new Date().getMonth();
-        const currentYear = new Date().getFullYear();
-        const monthDates = dates.filter(date => {
-            const dateObj = new Date(date);
-            return dateObj.getMonth() === currentMonth && 
-                   dateObj.getFullYear() === currentYear;
-        });
-        
-        if (monthDates.length > 0) {
-            const monthlyData = monthDates.map(date => {
-                const data = history[date];
-                const completed = data.morningRoutine.filter(r => r.completed).length;
-                const total = this.settings.routineTarget || 7;
-                return Math.round((completed / total) * 100);
-            });
-            
-            // Update heatmap
-            this.updateHeatmap(monthDates);
-            
-            // Update monthly stats
-            const monthlyAvg = monthlyData.reduce((a, b) => a + b, 0) / monthlyData.length;
-            document.getElementById('monthly-avg').textContent = `${Math.round(monthlyAvg)}%`;
-            document.getElementById('monthly-days').textContent = monthDates.length;
-            
-            // Calculate best streak for monthly
-            let bestStreak = 0;
-            let currentStreak = 0;
-            for (const percent of monthlyData) {
-                if (percent >= 50) {
-                    currentStreak++;
-                    bestStreak = Math.max(bestStreak, currentStreak);
-                } else {
-                    currentStreak = 0;
-                }
-            }
-            document.getElementById('monthly-best').textContent = bestStreak;
-            
-            // Calculate distribution for monthly chart
-            const complete = monthlyData.filter(p => p >= 90).length;
-            const partial = monthlyData.filter(p => p >= 50 && p < 90).length;
-            const missed = monthlyData.filter(p => p < 50).length;
-            
-            this.charts.monthlyDistribution.data.datasets[0].data = [complete, partial, missed];
-            this.charts.monthlyDistribution.update();
-            
-            // Update monthly trend chart (weekly averages within month)
-            const weeklyAverages = [0, 0, 0, 0];
-            monthDates.forEach(dateStr => {
-                const date = new Date(dateStr);
-                const week = Math.floor((date.getDate() - 1) / 7);
-                if (week < 4) {
+            // Get last 7 days or pad with zeros
+            for (let i = 6; i >= 0; i--) {
+                const date = new Date();
+                date.setDate(date.getDate() - i);
+                const dateStr = this.formatDate(date);
+                
+                if (history[dateStr]) {
                     const data = history[dateStr];
                     const completed = data.morningRoutine.filter(r => r.completed).length;
                     const total = this.settings.routineTarget || 7;
-                    weeklyAverages[week] = weeklyAverages[week] || 0;
-                    weeklyAverages[week] = Math.round((weeklyAverages[week] + Math.round((completed / total) * 100)) / 2);
+                    weeklyData.push(Math.round((completed / Math.max(total, 1)) * 100));
+                } else {
+                    weeklyData.push(0);
                 }
+            }
+            
+            this.charts.weekly.data.datasets[0].data = weeklyData;
+            this.charts.weekly.update('none');
+            
+            // Update weekly stats
+            const weeklyAvg = weeklyData.reduce((a, b) => a + b, 0) / 7;
+            document.getElementById('weekly-avg-percent').textContent = `${Math.round(weeklyAvg)}%`;
+            document.getElementById('weekly-total').textContent = last7Dates.reduce((sum, date) => sum + (history[date]?.archery.length || 0), 0);
+            
+            // Calculate streak for weekly
+            let streak = 0;
+            for (let i = weeklyData.length - 1; i >= 0; i--) {
+                if (weeklyData[i] >= 50) {
+                    streak++;
+                } else {
+                    break;
+                }
+            }
+            document.getElementById('weekly-streak').textContent = streak;
+        }
+        
+        // Update monthly data
+        if (this.charts.monthlyDistribution && this.charts.monthlyTrend) {
+            const currentMonth = new Date().getMonth();
+            const currentYear = new Date().getFullYear();
+            const monthDates = dates.filter(date => {
+                const dateObj = new Date(date);
+                return dateObj.getMonth() === currentMonth && 
+                       dateObj.getFullYear() === currentYear;
             });
             
-            this.charts.monthlyTrend.data.datasets[0].data = weeklyAverages;
-            this.charts.monthlyTrend.update();
+            if (monthDates.length > 0) {
+                const monthlyData = monthDates.map(date => {
+                    const data = history[date];
+                    const completed = data.morningRoutine.filter(r => r.completed).length;
+                    const total = this.settings.routineTarget || 7;
+                    return Math.round((completed / Math.max(total, 1)) * 100);
+                });
+                
+                // Update heatmap
+                this.updateHeatmap(monthDates);
+                
+                // Update monthly stats
+                const monthlyAvg = monthlyData.reduce((a, b) => a + b, 0) / monthlyData.length;
+                document.getElementById('monthly-avg').textContent = `${Math.round(monthlyAvg)}%`;
+                document.getElementById('monthly-days').textContent = monthDates.length;
+                
+                // Calculate best streak for monthly
+                let bestStreak = 0;
+                let currentStreak = 0;
+                for (const percent of monthlyData) {
+                    if (percent >= 50) {
+                        currentStreak++;
+                        bestStreak = Math.max(bestStreak, currentStreak);
+                    } else {
+                        currentStreak = 0;
+                    }
+                }
+                document.getElementById('monthly-best').textContent = bestStreak;
+                
+                // Calculate distribution for monthly chart
+                const complete = monthlyData.filter(p => p >= 90).length;
+                const partial = monthlyData.filter(p => p >= 50 && p < 90).length;
+                const missed = monthlyData.filter(p => p < 50).length;
+                
+                this.charts.monthlyDistribution.data.datasets[0].data = [complete, partial, missed];
+                this.charts.monthlyDistribution.update('none');
+                
+                // Update monthly trend chart (weekly averages within month)
+                const weeklyAverages = [0, 0, 0, 0];
+                monthDates.forEach(dateStr => {
+                    const date = new Date(dateStr);
+                    const week = Math.floor((date.getDate() - 1) / 7);
+                    if (week < 4) {
+                        const data = history[dateStr];
+                        const completed = data.morningRoutine.filter(r => r.completed).length;
+                        const total = this.settings.routineTarget || 7;
+                        weeklyAverages[week] = weeklyAverages[week] || 0;
+                        weeklyAverages[week] = Math.round((weeklyAverages[week] + Math.round((completed / Math.max(total, 1)) * 100)) / 2);
+                    }
+                });
+                
+                this.charts.monthlyTrend.data.datasets[0].data = weeklyAverages;
+                this.charts.monthlyTrend.update('none');
+            } else {
+                // Reset monthly data if no data
+                this.charts.monthlyDistribution.data.datasets[0].data = [0, 0, 0];
+                this.charts.monthlyDistribution.update('none');
+                this.charts.monthlyTrend.data.datasets[0].data = [0, 0, 0, 0];
+                this.charts.monthlyTrend.update('none');
+                this.updateHeatmap([]);
+            }
         }
+        
+        // Resize charts after update
+        setTimeout(() => {
+            Object.values(this.charts).forEach(chart => {
+                if (chart && typeof chart.resize === 'function') {
+                    chart.resize();
+                }
+            });
+        }, 100);
     }
 
     updateHeatmap(dates) {
         const heatmap = document.getElementById('monthly-heatmap');
+        if (!heatmap) return;
+        
         heatmap.innerHTML = '';
         const history = JSON.parse(localStorage.getItem('dashboardHistory') || '{}');
         
@@ -668,7 +759,7 @@ class DashboardApp {
                 const data = history[dateStr];
                 const completed = data.morningRoutine.filter(r => r.completed).length;
                 const total = this.settings.routineTarget || 7;
-                const percentage = Math.round((completed / total) * 100);
+                const percentage = Math.round((completed / Math.max(total, 1)) * 100);
                 
                 if (percentage >= 90) {
                     dayElement.classList.add('completed');
@@ -695,8 +786,10 @@ class DashboardApp {
     generateDailyReport() {
         const completedCount = this.state.morningRoutine.filter(r => r.completed).length;
         const total = this.settings.routineTarget || 7;
-        const percentage = Math.round((completedCount / total) * 100);
+        const percentage = total > 0 ? Math.round((completedCount / total) * 100) : 0;
         const insights = document.getElementById('daily-insights');
+        
+        if (!insights) return;
         
         // Always show insights, even if no data
         let insightText = '';
@@ -825,9 +918,11 @@ class DashboardApp {
     }
 
     generateWeeklyReport() {
+        const insights = document.getElementById('weekly-insights');
+        if (!insights) return;
+        
         const history = JSON.parse(localStorage.getItem('dashboardHistory') || '{}');
         const dates = Object.keys(history).sort().slice(-7);
-        const insights = document.getElementById('weekly-insights');
         
         let insightText = '';
         
@@ -851,7 +946,7 @@ class DashboardApp {
                 const data = history[date];
                 const completed = data.morningRoutine.filter(r => r.completed).length;
                 const total = this.settings.routineTarget || 7;
-                return Math.round((completed / total) * 100);
+                return Math.round((completed / Math.max(total, 1)) * 100);
             });
             
             const average = Math.round(weeklyData.reduce((a, b) => a + b, 0) / weeklyData.length);
@@ -874,7 +969,7 @@ class DashboardApp {
                     <div class="insight-item positive">
                         <div class="insight-title">🏆 Exceptional Week</div>
                         <div class="insight-text">Your weekly average of ${average}% shows incredible consistency. You've maintained a ${streak}-day streak!</div>
-                    </div>
+                </div>
                     <div class="insight-item positive">
                         <div class="insight-title">📊 Weekly Summary</div>
                         <div class="insight-text">• ${dates.length} tracked days<br>• ${totalArchery} archery sessions<br>• ${totalWater} glasses of water<br>• ${streak}-day active streak</div>
@@ -920,6 +1015,9 @@ class DashboardApp {
     }
 
     generateMonthlyReport() {
+        const insights = document.getElementById('monthly-insights');
+        if (!insights) return;
+        
         const history = JSON.parse(localStorage.getItem('dashboardHistory') || '{}');
         const currentMonth = new Date().getMonth();
         const currentYear = new Date().getFullYear();
@@ -929,7 +1027,6 @@ class DashboardApp {
                    dateObj.getFullYear() === currentYear;
         });
         
-        const insights = document.getElementById('monthly-insights');
         let insightText = '';
         
         if (monthDates.length === 0) {
@@ -952,7 +1049,7 @@ class DashboardApp {
                 const data = history[date];
                 const completed = data.morningRoutine.filter(r => r.completed).length;
                 const total = this.settings.routineTarget || 7;
-                return Math.round((completed / total) * 100);
+                return Math.round((completed / Math.max(total, 1)) * 100);
             });
             
             const average = Math.round(monthlyData.reduce((a, b) => a + b, 0) / monthlyData.length);
@@ -1030,18 +1127,20 @@ class DashboardApp {
 
     showDownloadModal() {
         const modal = document.getElementById('download-modal');
-        modal.classList.add('show');
-        
-        // Set default dates
-        const today = new Date();
-        const lastWeek = new Date();
-        lastWeek.setDate(lastWeek.getDate() - 7);
-        
-        document.getElementById('start-date').value = this.formatDate(lastWeek);
-        document.getElementById('end-date').value = this.formatDate(today);
-        document.getElementById('daily-date').value = this.formatDate(today);
-        document.getElementById('weekly-select').value = this.getCurrentWeek();
-        document.getElementById('monthly-select').value = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0');
+        if (modal) {
+            modal.classList.add('show');
+            
+            // Set default dates
+            const today = new Date();
+            const lastWeek = new Date();
+            lastWeek.setDate(lastWeek.getDate() - 7);
+            
+            document.getElementById('start-date').value = this.formatDate(lastWeek);
+            document.getElementById('end-date').value = this.formatDate(today);
+            document.getElementById('daily-date').value = this.formatDate(today);
+            document.getElementById('weekly-select').value = this.getCurrentWeek();
+            document.getElementById('monthly-select').value = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0');
+        }
     }
 
     getCurrentWeek() {
@@ -1054,20 +1153,30 @@ class DashboardApp {
 
     showHistoryModal() {
         const modal = document.getElementById('history-modal');
-        modal.classList.add('show');
-        this.loadHistoryView();
+        if (modal) {
+            modal.classList.add('show');
+            this.loadHistoryView();
+        }
     }
 
     showDetailModal(title, content) {
-        document.getElementById('detail-title').textContent = title;
-        document.getElementById('detail-content').innerHTML = content;
-        document.getElementById('detail-modal').classList.add('show');
+        const titleEl = document.getElementById('detail-title');
+        const contentEl = document.getElementById('detail-content');
+        const modal = document.getElementById('detail-modal');
+        
+        if (titleEl && contentEl && modal) {
+            titleEl.textContent = title;
+            contentEl.innerHTML = content;
+            modal.classList.add('show');
+        }
     }
 
     loadHistoryView() {
+        const container = document.getElementById('history-list');
+        if (!container) return;
+        
         const history = JSON.parse(localStorage.getItem('dashboardHistory') || '{}');
         const dates = Object.keys(history).sort().reverse(); // Most recent first
-        const container = document.getElementById('history-list');
         
         if (dates.length === 0) {
             container.innerHTML = `
@@ -1085,7 +1194,7 @@ class DashboardApp {
             const data = history[dateStr];
             const completedCount = data.morningRoutine.filter(r => r.completed).length;
             const total = this.settings.routineTarget || 7;
-            const percentage = Math.round((completedCount / total) * 100);
+            const percentage = Math.round((completedCount / Math.max(total, 1)) * 100);
             const totalConsumption = data.consumption.water + data.consumption.coffee + data.consumption.tea;
             const selfCareStatus = (data.selfCare.hair ? 1 : 0) + (data.selfCare.face ? 1 : 0);
             
@@ -1204,6 +1313,18 @@ class DashboardApp {
 
     generatePDFReport(type, options = {}) {
         const { jsPDF } = window.jspdf;
+        if (!jsPDF) {
+            alert('PDF generation library not loaded. Please check your internet connection.');
+            return;
+        }
+        
+        // Check if there's any data before generating PDF
+        const history = JSON.parse(localStorage.getItem('dashboardHistory') || '{}');
+        if (Object.keys(history).length === 0) {
+            alert('No data available to generate report. Please track some activities first.');
+            return;
+        }
+        
         const doc = new jsPDF('p', 'mm', 'a4');
         
         // Add title
@@ -1241,7 +1362,6 @@ class DashboardApp {
         doc.text(`Generated: ${reportDate}`, 20, 54);
         
         // Get data based on report type
-        const history = JSON.parse(localStorage.getItem('dashboardHistory') || '{}');
         let dates = [];
         
         if (type === 'daily' && selectedDate) {
@@ -1293,7 +1413,7 @@ class DashboardApp {
                 const data = history[dateStr];
                 const completedCount = data.morningRoutine.filter(r => r.completed).length;
                 const total = this.settings.routineTarget || 7;
-                const percentage = Math.round((completedCount / total) * 100);
+                const percentage = Math.round((completedCount / Math.max(total, 1)) * 100);
                 
                 // Day header
                 doc.setFontSize(14);
@@ -1427,48 +1547,55 @@ class DashboardApp {
     }
 
     showSettingsModal() {
-        document.getElementById('settings-modal').classList.add('show');
+        const modal = document.getElementById('settings-modal');
+        if (modal) {
+            modal.classList.add('show');
+        }
     }
 
     setupEventListeners() {
         // Date navigation
-        document.getElementById('prev-day').addEventListener('click', () => this.navigateDate(-1));
-        document.getElementById('next-day').addEventListener('click', () => this.navigateDate(1));
-        document.getElementById('prev-day-btn').addEventListener('click', () => this.navigateDate(-1));
-        document.getElementById('next-day-btn').addEventListener('click', () => this.navigateDate(1));
-        document.getElementById('today-btn').addEventListener('click', () => this.goToToday());
+        const prevDayBtn = document.getElementById('prev-day');
+        const nextDayBtn = document.getElementById('next-day');
+        const prevDayHeaderBtn = document.getElementById('prev-day-btn');
+        const nextDayHeaderBtn = document.getElementById('next-day-btn');
+        const todayBtn = document.getElementById('today-btn');
+        
+        if (prevDayBtn) prevDayBtn.addEventListener('click', () => this.navigateDate(-1));
+        if (nextDayBtn) nextDayBtn.addEventListener('click', () => this.navigateDate(1));
+        if (prevDayHeaderBtn) prevDayHeaderBtn.addEventListener('click', () => this.navigateDate(-1));
+        if (nextDayHeaderBtn) nextDayHeaderBtn.addEventListener('click', () => this.navigateDate(1));
+        if (todayBtn) todayBtn.addEventListener('click', () => this.goToToday());
 
-        // Morning routine toggles
-        document.addEventListener('click', (e) => {
-            if (e.target.matches('.toggle-switch') || e.target.matches('.toggle-label')) {
-                const checkbox = e.target.matches('.toggle-switch') ? e.target : document.getElementById(e.target.getAttribute('for'));
-                if (checkbox && checkbox.dataset.id) {
-                    const id = parseInt(checkbox.dataset.id);
-                    const item = this.state.morningRoutine.find(r => r.id === id);
-                    if (item) {
-                        this.showUndoToast('toggleRoutine', { id: item.id, type: 'routine' });
-                        item.completed = !item.completed;
-                        this.saveHistory();
-                        this.updateUI();
-                        this.generateReports();
-                    }
+        // Morning routine toggles - event delegation for dynamic content
+        document.addEventListener('change', (e) => {
+            if (e.target.classList.contains('toggle-switch') && e.target.dataset.id) {
+                const id = parseInt(e.target.dataset.id);
+                const item = this.state.morningRoutine.find(r => r.id === id);
+                if (item) {
+                    this.showUndoToast('toggleRoutine', { id: item.id, type: 'routine' });
+                    item.completed = !item.completed;
+                    this.saveHistory();
+                    this.updateUI();
+                    this.generateReports();
                 }
             }
         });
 
-        // Consumption buttons
+        // Consumption buttons - event delegation
         document.addEventListener('click', (e) => {
-            if (e.target.matches('.btn-increment, .btn-increment *')) {
-                const btn = e.target.closest('.btn-increment');
-                const type = btn.dataset.type;
+            const incrementBtn = e.target.closest('.btn-increment');
+            const decrementBtn = e.target.closest('.btn-decrement');
+            
+            if (incrementBtn && incrementBtn.dataset.type) {
+                const type = incrementBtn.dataset.type;
                 this.showUndoToast('increment', { type: type });
                 this.state.consumption[type]++;
                 this.saveHistory();
                 this.updateUI();
                 this.generateReports();
-            } else if (e.target.matches('.btn-decrement, .btn-decrement *')) {
-                const btn = e.target.closest('.btn-decrement');
-                const type = btn.dataset.type;
+            } else if (decrementBtn && decrementBtn.dataset.type) {
+                const type = decrementBtn.dataset.type;
                 if (this.state.consumption[type] > 0) {
                     this.showUndoToast('decrement', { type: type });
                     this.state.consumption[type]--;
@@ -1479,11 +1606,13 @@ class DashboardApp {
             }
         });
 
-        // Archery buttons
+        // Archery buttons - event delegation
         document.addEventListener('click', (e) => {
-            if (e.target.matches('.archery-btn, .archery-btn *')) {
-                const btn = e.target.closest('.archery-btn');
-                const type = btn.dataset.type;
+            const archeryBtn = e.target.closest('.archery-btn');
+            const removeBtn = e.target.closest('.btn-remove');
+            
+            if (archeryBtn && archeryBtn.dataset.type) {
+                const type = archeryBtn.dataset.type;
                 const activity = {
                     id: Date.now(),
                     type: type,
@@ -1494,9 +1623,8 @@ class DashboardApp {
                 this.saveHistory();
                 this.updateUI();
                 this.generateReports();
-            } else if (e.target.matches('.btn-remove, .btn-remove *')) {
-                const btn = e.target.closest('.btn-remove');
-                const id = parseInt(btn.dataset.id);
+            } else if (removeBtn && removeBtn.dataset.id) {
+                const id = parseInt(removeBtn.dataset.id);
                 const activity = this.state.archery.find(a => a.id === id);
                 if (activity) {
                     this.showUndoToast('removeArchery', activity);
@@ -1509,16 +1637,28 @@ class DashboardApp {
         });
 
         // Self-care toggles
-        document.addEventListener('change', (e) => {
-            if (e.target.id === 'hair-care' || e.target.id === 'face-care') {
-                const type = e.target.id.replace('-care', '');
-                this.showUndoToast('toggleSelfCare', { type: type });
-                this.state.selfCare[type] = !this.state.selfCare[type];
+        const hairCare = document.getElementById('hair-care');
+        const faceCare = document.getElementById('face-care');
+        
+        if (hairCare) {
+            hairCare.addEventListener('change', () => {
+                this.showUndoToast('toggleSelfCare', { type: 'hair' });
+                this.state.selfCare.hair = !this.state.selfCare.hair;
                 this.saveHistory();
                 this.updateUI();
                 this.generateReports();
-            }
-        });
+            });
+        }
+        
+        if (faceCare) {
+            faceCare.addEventListener('change', () => {
+                this.showUndoToast('toggleSelfCare', { type: 'face' });
+                this.state.selfCare.face = !this.state.selfCare.face;
+                this.saveHistory();
+                this.updateUI();
+                this.generateReports();
+            });
+        }
 
         // Report tabs
         document.querySelectorAll('.report-tab').forEach(tab => {
@@ -1533,239 +1673,300 @@ class DashboardApp {
                 document.querySelectorAll('.report-section').forEach(section => {
                     section.classList.remove('active');
                 });
-                document.getElementById(`${period}-report`).classList.add('active');
+                const reportSection = document.getElementById(`${period}-report`);
+                if (reportSection) {
+                    reportSection.classList.add('active');
+                }
             });
         });
 
         // Reset consumption
-        document.getElementById('reset-consumption').addEventListener('click', () => {
-            if (confirm('Reset all consumption counters to zero?')) {
-                this.state.consumption = { water: 0, coffee: 0, tea: 0 };
-                this.saveHistory();
-                this.updateUI();
-                this.generateReports();
-            }
-        });
+        const resetBtn = document.getElementById('reset-consumption');
+        if (resetBtn) {
+            resetBtn.addEventListener('click', () => {
+                if (confirm('Reset all consumption counters to zero?')) {
+                    this.state.consumption = { water: 0, coffee: 0, tea: 0 };
+                    this.saveHistory();
+                    this.updateUI();
+                    this.generateReports();
+                }
+            });
+        }
 
         // Download button
-        document.getElementById('download-btn').addEventListener('click', () => {
-            this.showDownloadModal();
-        });
+        const downloadBtn = document.getElementById('download-btn');
+        if (downloadBtn) {
+            downloadBtn.addEventListener('click', () => {
+                this.showDownloadModal();
+            });
+        }
 
         // History button
-        document.getElementById('history-btn').addEventListener('click', () => {
-            this.showHistoryModal();
-        });
+        const historyBtn = document.getElementById('history-btn');
+        if (historyBtn) {
+            historyBtn.addEventListener('click', () => {
+                this.showHistoryModal();
+            });
+        }
 
         // Settings buttons
-        document.getElementById('settings-btn').addEventListener('click', () => {
-            this.showSettingsModal();
-        });
-
-        document.getElementById('settings-btn-footer').addEventListener('click', () => {
-            this.showSettingsModal();
-        });
+        const settingsBtn = document.getElementById('settings-btn');
+        const settingsFooterBtn = document.getElementById('settings-btn-footer');
+        
+        if (settingsBtn) settingsBtn.addEventListener('click', () => this.showSettingsModal());
+        if (settingsFooterBtn) settingsFooterBtn.addEventListener('click', () => this.showSettingsModal());
 
         // Save settings
-        document.getElementById('save-settings').addEventListener('click', () => {
-            this.settings.routineTarget = parseInt(document.getElementById('routine-target').value) || 7;
-            this.settings.waterTarget = parseInt(document.getElementById('water-target').value) || 8;
-            this.settings.coffeeTarget = parseInt(document.getElementById('coffee-target').value) || 2;
-            this.settings.teaTarget = parseInt(document.getElementById('tea-target').value) || 1;
-            
-            this.saveSettings();
-            this.updateSettingsDisplay();
-            this.updateUI();
-            this.generateReports();
-            
-            alert('Settings saved successfully!');
-            document.getElementById('settings-modal').classList.remove('show');
-        });
+        const saveSettingsBtn = document.getElementById('save-settings');
+        if (saveSettingsBtn) {
+            saveSettingsBtn.addEventListener('click', () => {
+                this.settings.routineTarget = parseInt(document.getElementById('routine-target').value) || 7;
+                this.settings.waterTarget = parseInt(document.getElementById('water-target').value) || 8;
+                this.settings.coffeeTarget = parseInt(document.getElementById('coffee-target').value) || 2;
+                this.settings.teaTarget = parseInt(document.getElementById('tea-target').value) || 1;
+                
+                if (this.saveSettings()) {
+                    this.updateSettingsDisplay();
+                    this.updateUI();
+                    this.generateReports();
+                    
+                    alert('Settings saved successfully!');
+                    document.getElementById('settings-modal').classList.remove('show');
+                }
+            });
+        }
 
         // Export data
-        document.getElementById('export-data').addEventListener('click', () => {
-            const history = localStorage.getItem('dashboardHistory');
-            const settings = localStorage.getItem('dashboardSettings');
-            const data = {
-                history: JSON.parse(history || '{}'),
-                settings: JSON.parse(settings || '{}'),
-                exportDate: new Date().toISOString(),
-                version: '3.0'
-            };
-            
-            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `discipline_os_backup_${this.formatDate(new Date())}.json`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-        });
-
-        // Import data
-        document.getElementById('import-data').addEventListener('click', () => {
-            const input = document.createElement('input');
-            input.type = 'file';
-            input.accept = '.json';
-            
-            input.onchange = (e) => {
-                const file = e.target.files[0];
-                const reader = new FileReader();
-                
-                reader.onload = (event) => {
-                    try {
-                        const data = JSON.parse(event.target.result);
-                        
-                        if (data.history) {
-                            localStorage.setItem('dashboardHistory', JSON.stringify(data.history));
-                        }
-                        
-                        if (data.settings) {
-                            localStorage.setItem('dashboardSettings', JSON.stringify(data.settings));
-                            this.settings = data.settings;
-                            this.updateSettingsDisplay();
-                        }
-                        
-                        alert('Data imported successfully!');
-                        this.loadDate(this.currentDate);
-                        this.generateReports();
-                    } catch (error) {
-                        alert('Error importing data. Please check the file format.');
-                    }
+        const exportBtn = document.getElementById('export-data');
+        if (exportBtn) {
+            exportBtn.addEventListener('click', () => {
+                const history = localStorage.getItem('dashboardHistory');
+                const settings = localStorage.getItem('dashboardSettings');
+                const data = {
+                    history: JSON.parse(history || '{}'),
+                    settings: JSON.parse(settings || '{}'),
+                    exportDate: new Date().toISOString(),
+                    version: '3.0'
                 };
                 
-                reader.readAsText(file);
-            };
-            
-            input.click();
-        });
+                try {
+                    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `discipline_os_backup_${this.formatDate(new Date())}.json`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                } catch (e) {
+                    console.error('Error exporting data:', e);
+                    alert('Error exporting data. Please try again.');
+                }
+            });
+        }
+
+        // Import data
+        const importBtn = document.getElementById('import-data');
+        if (importBtn) {
+            importBtn.addEventListener('click', () => {
+                const input = document.createElement('input');
+                input.type = 'file';
+                input.accept = '.json';
+                
+                input.onchange = (e) => {
+                    const file = e.target.files[0];
+                    if (!file) return;
+                    
+                    const reader = new FileReader();
+                    
+                    reader.onload = (event) => {
+                        try {
+                            const data = JSON.parse(event.target.result);
+                            
+                            if (data.history) {
+                                localStorage.setItem('dashboardHistory', JSON.stringify(data.history));
+                            }
+                            
+                            if (data.settings) {
+                                localStorage.setItem('dashboardSettings', JSON.stringify(data.settings));
+                                this.settings = data.settings;
+                                this.updateSettingsDisplay();
+                            }
+                            
+                            alert('Data imported successfully!');
+                            this.loadDate(this.currentDate);
+                            this.generateReports();
+                        } catch (error) {
+                            console.error('Error importing data:', error);
+                            alert('Error importing data. Please check the file format.');
+                        }
+                    };
+                    
+                    reader.readAsText(file);
+                };
+                
+                input.click();
+            });
+        }
 
         // Clear data
-        document.getElementById('clear-data').addEventListener('click', () => {
-            if (confirm('Are you sure you want to clear all data? This cannot be undone.')) {
-                localStorage.removeItem('dashboardHistory');
-                localStorage.removeItem('dashboardSettings');
-                this.state = this.getInitialState();
-                this.settings = this.getSettings();
-                this.updateSettingsDisplay();
-                this.updateUI();
-                this.generateReports();
-                alert('All data has been cleared.');
-            }
-        });
+        const clearBtn = document.getElementById('clear-data');
+        if (clearBtn) {
+            clearBtn.addEventListener('click', () => {
+                if (confirm('Are you sure you want to clear all data? This cannot be undone.')) {
+                    localStorage.removeItem('dashboardHistory');
+                    localStorage.removeItem('dashboardSettings');
+                    this.state = this.getInitialState();
+                    this.settings = this.getSettings();
+                    this.updateSettingsDisplay();
+                    this.updateUI();
+                    this.generateReports();
+                    alert('All data has been cleared.');
+                }
+            });
+        }
 
         // Modal close buttons
-        document.getElementById('close-download-modal').addEventListener('click', () => {
-            document.getElementById('download-modal').classList.remove('show');
-        });
-
-        document.getElementById('close-history-modal').addEventListener('click', () => {
-            document.getElementById('history-modal').classList.remove('show');
-        });
-
-        document.getElementById('close-detail-modal').addEventListener('click', () => {
-            document.getElementById('detail-modal').classList.remove('show');
-        });
-
-        document.getElementById('close-settings-modal').addEventListener('click', () => {
-            document.getElementById('settings-modal').classList.remove('show');
-        });
+        const closeDownloadModal = document.getElementById('close-download-modal');
+        const closeHistoryModal = document.getElementById('close-history-modal');
+        const closeDetailModal = document.getElementById('close-detail-modal');
+        const closeSettingsModal = document.getElementById('close-settings-modal');
+        
+        if (closeDownloadModal) {
+            closeDownloadModal.addEventListener('click', () => {
+                document.getElementById('download-modal').classList.remove('show');
+            });
+        }
+        
+        if (closeHistoryModal) {
+            closeHistoryModal.addEventListener('click', () => {
+                document.getElementById('history-modal').classList.remove('show');
+            });
+        }
+        
+        if (closeDetailModal) {
+            closeDetailModal.addEventListener('click', () => {
+                document.getElementById('detail-modal').classList.remove('show');
+            });
+        }
+        
+        if (closeSettingsModal) {
+            closeSettingsModal.addEventListener('click', () => {
+                document.getElementById('settings-modal').classList.remove('show');
+            });
+        }
 
         // Generate PDF button
-        document.getElementById('generate-pdf').addEventListener('click', () => {
-            const reportType = document.getElementById('report-type').value;
-            this.generatePDFReport(reportType);
-            document.getElementById('download-modal').classList.remove('show');
-        });
+        const generatePDFBtn = document.getElementById('generate-pdf');
+        if (generatePDFBtn) {
+            generatePDFBtn.addEventListener('click', () => {
+                const reportType = document.getElementById('report-type').value;
+                this.generatePDFReport(reportType);
+                document.getElementById('download-modal').classList.remove('show');
+            });
+        }
 
         // Report type change
-        document.getElementById('report-type').addEventListener('change', (e) => {
-            const type = e.target.value;
-            
-            // Show/hide options based on report type
-            document.getElementById('daily-date-group').style.display = 
-                type === 'daily' ? 'block' : 'none';
-            document.getElementById('weekly-calendar-group').style.display = 
-                type === 'weekly' ? 'block' : 'none';
-            document.getElementById('monthly-calendar-group').style.display = 
-                type === 'monthly' ? 'block' : 'none';
-            document.getElementById('date-range-group').style.display = 
-                type === 'custom' ? 'block' : 'none';
-        });
+        const reportTypeSelect = document.getElementById('report-type');
+        if (reportTypeSelect) {
+            reportTypeSelect.addEventListener('change', (e) => {
+                const type = e.target.value;
+                
+                // Show/hide options based on report type
+                const dailyGroup = document.getElementById('daily-date-group');
+                const weeklyGroup = document.getElementById('weekly-calendar-group');
+                const monthlyGroup = document.getElementById('monthly-calendar-group');
+                const dateRangeGroup = document.getElementById('date-range-group');
+                
+                if (dailyGroup) dailyGroup.style.display = type === 'daily' ? 'block' : 'none';
+                if (weeklyGroup) weeklyGroup.style.display = type === 'weekly' ? 'block' : 'none';
+                if (monthlyGroup) monthlyGroup.style.display = type === 'monthly' ? 'block' : 'none';
+                if (dateRangeGroup) dateRangeGroup.style.display = type === 'custom' ? 'block' : 'none';
+            });
+        }
 
         // Detailed view clicks in analytics
-        document.getElementById('daily-routine-stat').addEventListener('click', () => {
-            const completedCount = this.state.morningRoutine.filter(r => r.completed).length;
-            const total = this.settings.routineTarget || 7;
-            let content = `<div class="detailed-view">`;
-            
-            this.state.morningRoutine.slice(0, total).forEach(item => {
-                content += `
-                    <div class="detailed-item">
-                        <span>${item.time} - ${item.activity}</span>
-                        <strong>${item.completed ? '✓ Completed' : '✗ Pending'}</strong>
-                    </div>
-                `;
-            });
-            
-            content += `<div class="detailed-item">
-                <span>Overall Completion</span>
-                <strong>${completedCount}/${total} (${Math.round((completedCount/total)*100)}%)</strong>
-            </div>`;
-            content += `</div>`;
-            this.showDetailModal('Today\'s Morning Routine', content);
-        });
-
-        document.getElementById('daily-consumption-stat').addEventListener('click', () => {
-            const content = `
-                <div class="detailed-view">
-                    <div class="detailed-item">
-                        <span>Water</span>
-                        <strong>${this.state.consumption.water} glasses (Target: ${this.settings.waterTarget})</strong>
-                    </div>
-                    <div class="detailed-item">
-                        <span>Coffee</span>
-                        <strong>${this.state.consumption.coffee} cups (Target: ${this.settings.coffeeTarget})</strong>
-                    </div>
-                    <div class="detailed-item">
-                        <span>Tea</span>
-                        <strong>${this.state.consumption.tea} cups (Target: ${this.settings.teaTarget})</strong>
-                    </div>
-                    <div class="detailed-item">
-                        <span>Total Consumption</span>
-                        <strong>${this.state.consumption.water + this.state.consumption.coffee + this.state.consumption.tea} items</strong>
-                    </div>
-                </div>
-            `;
-            this.showDetailModal('Today\'s Consumption', content);
-        });
-
-        document.getElementById('daily-archery-stat').addEventListener('click', () => {
-            if (this.state.archery.length === 0) {
-                this.showDetailModal('Today\'s Archery Sessions', '<p>No archery sessions recorded today.</p>');
-            } else {
+        const dailyRoutineStat = document.getElementById('daily-routine-stat');
+        const dailyConsumptionStat = document.getElementById('daily-consumption-stat');
+        const dailyArcheryStat = document.getElementById('daily-archery-stat');
+        
+        if (dailyRoutineStat) {
+            dailyRoutineStat.addEventListener('click', () => {
+                const completedCount = this.state.morningRoutine.filter(r => r.completed).length;
+                const total = this.settings.routineTarget || 7;
                 let content = `<div class="detailed-view">`;
                 
-                this.state.archery.forEach(session => {
-                    const time = new Date(session.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                this.state.morningRoutine.slice(0, total).forEach(item => {
                     content += `
                         <div class="detailed-item">
-                            <span>${this.formatArcheryType(session.type)}</span>
-                            <strong>${time}</strong>
+                            <span>${item.time} - ${item.activity}</span>
+                            <strong>${item.completed ? '✓ Completed' : '✗ Pending'}</strong>
                         </div>
                     `;
                 });
                 
                 content += `<div class="detailed-item">
-                    <span>Total Sessions Today</span>
-                    <strong>${this.state.archery.length}</strong>
+                    <span>Overall Completion</span>
+                    <strong>${completedCount}/${total} (${Math.round((completedCount/Math.max(total, 1))*100)}%)</strong>
                 </div>`;
                 content += `</div>`;
-                this.showDetailModal('Today\'s Archery Sessions', content);
-            }
-        });
+                this.showDetailModal('Today\'s Morning Routine', content);
+            });
+        }
+        
+        if (dailyConsumptionStat) {
+            dailyConsumptionStat.addEventListener('click', () => {
+                const content = `
+                    <div class="detailed-view">
+                        <div class="detailed-item">
+                            <span>Water</span>
+                            <strong>${this.state.consumption.water} glasses (Target: ${this.settings.waterTarget})</strong>
+                        </div>
+                        <div class="detailed-item">
+                            <span>Coffee</span>
+                            <strong>${this.state.consumption.coffee} cups (Target: ${this.settings.coffeeTarget})</strong>
+                        </div>
+                        <div class="detailed-item">
+                            <span>Tea</span>
+                            <strong>${this.state.consumption.tea} cups (Target: ${this.settings.teaTarget})</strong>
+                        </div>
+                        <div class="detailed-item">
+                            <span>Total Consumption</span>
+                            <strong>${this.state.consumption.water + this.state.consumption.coffee + this.state.consumption.tea} items</strong>
+                        </div>
+                    </div>
+                `;
+                this.showDetailModal('Today\'s Consumption', content);
+            });
+        }
+        
+        if (dailyArcheryStat) {
+            dailyArcheryStat.addEventListener('click', () => {
+                if (this.state.archery.length === 0) {
+                    this.showDetailModal('Today\'s Archery Sessions', '<p>No archery sessions recorded today.</p>');
+                } else {
+                    let content = `<div class="detailed-view">`;
+                    
+                    this.state.archery.forEach(session => {
+                        const time = new Date(session.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                        content += `
+                            <div class="detailed-item">
+                                <span>${this.formatArcheryType(session.type)}</span>
+                                <strong>${time}</strong>
+                            </div>
+                        `;
+                    });
+                    
+                    content += `<div class="detailed-item">
+                        <span>Total Sessions Today</span>
+                        <strong>${this.state.archery.length}</strong>
+                    </div>`;
+                    content += `</div>`;
+                    this.showDetailModal('Today\'s Archery Sessions', content);
+                }
+            });
+        }
 
         // Close modals when clicking outside
         window.addEventListener('click', (e) => {
@@ -1773,11 +1974,35 @@ class DashboardApp {
                 e.target.classList.remove('show');
             }
         });
+        
+        // Handle window resize for charts
+        window.addEventListener('resize', () => {
+            setTimeout(() => {
+                this.updateCharts();
+            }, 250);
+        });
     }
 }
 
 // Initialize the app
 let app;
 document.addEventListener('DOMContentLoaded', () => {
-    app = new DashboardApp();
+    try {
+        app = new DashboardApp();
+        window.app = app; // Make available globally for debugging
+        console.log('Discipline OS Dashboard initialized successfully');
+    } catch (error) {
+        console.error('Error initializing DashboardApp:', error);
+        alert('Error loading dashboard. Please refresh the page.');
+    }
+});
+
+// Add global error handler
+window.addEventListener('error', function(e) {
+    console.error('Global error:', e.error);
+});
+
+// Add unhandled rejection handler
+window.addEventListener('unhandledrejection', function(e) {
+    console.error('Unhandled promise rejection:', e.reason);
 });
