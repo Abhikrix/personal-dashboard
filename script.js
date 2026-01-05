@@ -22,7 +22,8 @@ class DashboardApp {
                         morningRoutine: history[today].morningRoutine || this.getDefaultRoutine(),
                         consumption: history[today].consumption || { water: 0, coffee: 0, tea: 0 },
                         archery: history[today].archery || [],
-                        selfCare: history[today].selfCare || { hair: false, face: false }
+                        selfCare: history[today].selfCare || { hair: false, face: false },
+                        lectures: history[today].lectures || []
                     };
                 }
             } catch (e) {
@@ -36,7 +37,8 @@ class DashboardApp {
             morningRoutine: this.getDefaultRoutine(),
             consumption: { water: 0, coffee: 0, tea: 0 },
             archery: [],
-            selfCare: { hair: false, face: false }
+            selfCare: { hair: false, face: false },
+            lectures: []
         };
     }
 
@@ -103,11 +105,12 @@ class DashboardApp {
         this.setupEventListeners();
         this.loadDate(this.currentDate);
         this.setupCharts();
+        this.setupLectureCharts();
         this.updateUI();
         this.updateSettingsDisplay();
         this.generateReports();
+        this.updateLectureCharts();
         
-        // Fix for chart rendering on mobile
         setTimeout(() => {
             this.updateCharts();
         }, 100);
@@ -123,11 +126,13 @@ class DashboardApp {
                 consumption: this.state.consumption,
                 archery: this.state.archery,
                 selfCare: this.state.selfCare,
+                lectures: this.state.lectures || [],
                 timestamp: new Date().toISOString()
             };
             
             localStorage.setItem('dashboardHistory', JSON.stringify(history));
             this.updateCharts();
+            this.updateLectureCharts();
             this.generateReports();
             return true;
         } catch (e) {
@@ -147,7 +152,8 @@ class DashboardApp {
                 morningRoutine: history[dateStr].morningRoutine || this.getDefaultRoutine(),
                 consumption: history[dateStr].consumption || { water: 0, coffee: 0, tea: 0 },
                 archery: history[dateStr].archery || [],
-                selfCare: history[dateStr].selfCare || { hair: false, face: false }
+                selfCare: history[dateStr].selfCare || { hair: false, face: false },
+                lectures: history[dateStr].lectures || []
             };
         } else {
             this.state = {
@@ -155,7 +161,8 @@ class DashboardApp {
                 morningRoutine: this.getDefaultRoutine(),
                 consumption: { water: 0, coffee: 0, tea: 0 },
                 archery: [],
-                selfCare: { hair: false, face: false }
+                selfCare: { hair: false, face: false },
+                lectures: []
             };
         }
         
@@ -165,7 +172,9 @@ class DashboardApp {
         document.getElementById('current-date-display').textContent = dateStr === today ? 'Today' : dateStr;
         
         this.updateUI();
+        this.updateLectureAttendance();
         this.generateReports();
+        this.updateLectureCharts();
         return true;
     }
 
@@ -197,7 +206,9 @@ class DashboardApp {
             decrement: 'Consumption decreased',
             toggleSelfCare: 'Self-care toggled',
             addArchery: 'Archery activity added',
-            removeArchery: 'Archery activity removed'
+            removeArchery: 'Archery activity removed',
+            addLecture: 'Lecture attendance added',
+            removeLecture: 'Lecture attendance removed'
         };
         message.textContent = messages[action] || 'Action completed';
         
@@ -241,6 +252,16 @@ class DashboardApp {
             case 'removeArchery':
                 this.state.archery.push(data);
                 break;
+            case 'addLecture':
+                if (this.state.lectures) {
+                    this.state.lectures = this.state.lectures.filter(l => l.id !== data.id);
+                }
+                break;
+            case 'removeLecture':
+                if (this.state.lectures) {
+                    this.state.lectures.push(data);
+                }
+                break;
         }
         this.saveHistory();
         this.updateUI();
@@ -252,6 +273,7 @@ class DashboardApp {
         this.updateConsumption();
         this.updateArchery();
         this.updateSelfCare();
+        this.updateLectureAttendance();
         this.updateStats();
         this.updateCharts();
     }
@@ -777,10 +799,341 @@ class DashboardApp {
         }
     }
 
+    // ===== LECTURE ATTENDANCE METHODS =====
+
+    getLecturerFullName(code) {
+        const lecturers = {
+            'LSN': 'LSN',
+            'RK': 'RK',
+            'PR': 'PR',
+            'BM': 'BM',
+            'BKR': 'BKR',
+            'SDG': 'SDG',
+            'MSB': 'MSB',
+            'AS': 'AS',
+            'PP': 'PP'
+        };
+        return lecturers[code] || code;
+    }
+
+    updateLectureAttendance() {
+        const today = this.formatDate(this.currentDate);
+        const lectureList = document.getElementById('lecture-list');
+        const history = JSON.parse(localStorage.getItem('dashboardHistory') || '{}');
+        const todayData = history[today];
+        
+        if (!todayData || !todayData.lectures || todayData.lectures.length === 0) {
+            lectureList.innerHTML = `
+                <div class="no-data">
+                    <i class="fas fa-chalkboard-teacher"></i>
+                    <p>No lectures attended today</p>
+                </div>
+            `;
+            document.getElementById('today-lecture-hours').textContent = '0 hours';
+            document.getElementById('today-lecture-count').textContent = '0 lectures';
+        } else {
+            const totalHours = todayData.lectures.reduce((sum, lecture) => sum + lecture.hours, 0);
+            lectureList.innerHTML = todayData.lectures.map(lecture => `
+                <div class="lecture-item">
+                    <div class="lecture-info">
+                        <div class="lecture-lecturer">${this.getLecturerFullName(lecture.lecturer)}</div>
+                        <div class="lecture-hours">${lecture.hours} hour${lecture.hours !== 1 ? 's' : ''}</div>
+                        ${lecture.topic ? `<div class="lecture-topic">${lecture.topic}</div>` : ''}
+                    </div>
+                    <div class="lecture-actions">
+                        <button class="lecture-delete" data-id="${lecture.id}">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+            
+            document.getElementById('today-lecture-hours').textContent = `${totalHours.toFixed(1)} hour${totalHours !== 1 ? 's' : ''}`;
+            document.getElementById('today-lecture-count').textContent = `${todayData.lectures.length} lecture${todayData.lectures.length !== 1 ? 's' : ''}`;
+        }
+        
+        // Update weekly and monthly stats
+        this.updateLectureStats();
+    }
+
+    updateLectureStats() {
+        const history = JSON.parse(localStorage.getItem('dashboardHistory') || '{}');
+        const dates = Object.keys(history).sort();
+        
+        // Weekly stats (last 7 days)
+        const last7Dates = dates.slice(-7);
+        let weeklyHours = 0;
+        let weeklyLectures = 0;
+        
+        last7Dates.forEach(date => {
+            const data = history[date];
+            if (data && data.lectures) {
+                weeklyHours += data.lectures.reduce((sum, lecture) => sum + lecture.hours, 0);
+                weeklyLectures += data.lectures.length;
+            }
+        });
+        
+        document.getElementById('weekly-lecture-hours').textContent = weeklyHours.toFixed(1);
+        
+        // Monthly stats (current month)
+        const currentMonth = new Date().getMonth();
+        const currentYear = new Date().getFullYear();
+        const monthDates = dates.filter(date => {
+            const dateObj = new Date(date);
+            return dateObj.getMonth() === currentMonth && 
+                   dateObj.getFullYear() === currentYear;
+        });
+        
+        let monthlyHours = 0;
+        let monthlyLectures = 0;
+        
+        monthDates.forEach(date => {
+            const data = history[date];
+            if (data && data.lectures) {
+                monthlyHours += data.lectures.reduce((sum, lecture) => sum + lecture.hours, 0);
+                monthlyLectures += data.lectures.length;
+            }
+        });
+        
+        document.getElementById('monthly-lecture-hours').textContent = monthlyHours.toFixed(1);
+    }
+
+    showLectureModal() {
+        const modal = document.getElementById('lecture-modal');
+        if (modal) {
+            modal.classList.add('show');
+            document.getElementById('lecture-date').value = this.formatDate(this.currentDate);
+        }
+    }
+
+    saveLectureAttendance() {
+        const lecturer = document.getElementById('lecturer-select').value;
+        const hours = parseFloat(document.getElementById('lecture-hours').value);
+        const date = document.getElementById('lecture-date').value;
+        const topic = document.getElementById('lecture-topic').value.trim();
+        
+        if (!lecturer || !hours || hours <= 0) {
+            alert('Please select a lecturer and enter valid hours.');
+            return;
+        }
+        
+        const history = JSON.parse(localStorage.getItem('dashboardHistory') || '{}');
+        
+        if (!history[date]) {
+            history[date] = {
+                morningRoutine: this.getDefaultRoutine(),
+                consumption: { water: 0, coffee: 0, tea: 0 },
+                archery: [],
+                selfCare: { hair: false, face: false },
+                lectures: []
+            };
+        }
+        
+        if (!history[date].lectures) {
+            history[date].lectures = [];
+        }
+        
+        const lecture = {
+            id: Date.now(),
+            lecturer: lecturer,
+            hours: hours,
+            topic: topic || '',
+            timestamp: new Date().toISOString()
+        };
+        
+        history[date].lectures.push(lecture);
+        localStorage.setItem('dashboardHistory', JSON.stringify(history));
+        
+        this.showUndoToast('addLecture', lecture);
+        this.loadDate(this.currentDate);
+        document.getElementById('lecture-modal').classList.remove('show');
+    }
+
+    deleteLectureAttendance(lectureId) {
+        const history = JSON.parse(localStorage.getItem('dashboardHistory') || '{}');
+        const date = this.formatDate(this.currentDate);
+        
+        if (history[date] && history[date].lectures) {
+            const lecture = history[date].lectures.find(l => l.id === lectureId);
+            if (lecture) {
+                this.showUndoToast('removeLecture', lecture);
+                history[date].lectures = history[date].lectures.filter(l => l.id !== lectureId);
+                localStorage.setItem('dashboardHistory', JSON.stringify(history));
+                this.loadDate(this.currentDate);
+            }
+        }
+    }
+
+    // ===== LECTURE ANALYTICS METHODS =====
+
+    setupLectureCharts() {
+        // Lecture Pie Chart
+        const lectureCtx = document.getElementById('lecture-chart');
+        if (lectureCtx) {
+            this.charts.lecture = new Chart(lectureCtx, {
+                type: 'pie',
+                data: {
+                    labels: ['LSN', 'RK', 'PR', 'BM', 'BKR', 'SDG', 'MSB', 'AS', 'PP'],
+                    datasets: [{
+                        data: [0, 0, 0, 0, 0, 0, 0, 0, 0],
+                        backgroundColor: [
+                            '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6',
+                            '#06b6d4', '#84cc16', '#f97316', '#ec4899'
+                        ],
+                        borderWidth: 2,
+                        borderColor: 'white'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'right',
+                            labels: {
+                                padding: 20,
+                                usePointStyle: true
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        
+        // Lecture Trend Chart
+        const lectureTrendCtx = document.getElementById('lecture-trend-chart');
+        if (lectureTrendCtx) {
+            this.charts.lectureTrend = new Chart(lectureTrendCtx, {
+                type: 'bar',
+                data: {
+                    labels: ['Week 1', 'Week 2', 'Week 3', 'Week 4'],
+                    datasets: [{
+                        label: 'Lecture Hours',
+                        data: [0, 0, 0, 0],
+                        backgroundColor: '#3b82f6',
+                        borderColor: '#2563eb',
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Hours'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+    }
+
+    updateLectureCharts() {
+        const history = JSON.parse(localStorage.getItem('dashboardHistory') || '{}');
+        const dates = Object.keys(history).sort();
+        
+        // Calculate hours by lecturer
+        const lecturerHours = {};
+        const lecturers = ['LSN', 'RK', 'PR', 'BM', 'BKR', 'SDG', 'MSB', 'AS', 'PP'];
+        
+        lecturers.forEach(lecturer => {
+            lecturerHours[lecturer] = 0;
+        });
+        
+        dates.forEach(date => {
+            const data = history[date];
+            if (data && data.lectures) {
+                data.lectures.forEach(lecture => {
+                    if (lecturerHours.hasOwnProperty(lecture.lecturer)) {
+                        lecturerHours[lecture.lecturer] += lecture.hours;
+                    }
+                });
+            }
+        });
+        
+        // Update pie chart
+        if (this.charts.lecture) {
+            this.charts.lecture.data.datasets[0].data = lecturers.map(l => lecturerHours[l]);
+            this.charts.lecture.update('none');
+        }
+        
+        // Update lecturer stats
+        const lecturerStats = document.getElementById('lecturer-stats');
+        if (lecturerStats) {
+            const totalHours = Object.values(lecturerHours).reduce((a, b) => a + b, 0);
+            
+            let statsHTML = '';
+            lecturers.forEach(lecturer => {
+                const hours = lecturerHours[lecturer];
+                const percentage = totalHours > 0 ? Math.round((hours / totalHours) * 100) : 0;
+                
+                statsHTML += `
+                    <div class="lecturer-stat-item">
+                        <span class="lecturer-name">
+                            <i class="fas fa-user-graduate"></i>
+                            ${this.getLecturerFullName(lecturer)}
+                        </span>
+                        <span class="lecturer-hours">
+                            ${hours.toFixed(1)}h
+                            <span class="lecturer-percentage">${percentage}%</span>
+                        </span>
+                    </div>
+                `;
+            });
+            
+            lecturerStats.innerHTML = statsHTML;
+        }
+        
+        // Update trend chart (weekly hours per month)
+        if (this.charts.lectureTrend) {
+            const currentMonth = new Date().getMonth();
+            const currentYear = new Date().getFullYear();
+            const monthDates = dates.filter(date => {
+                const dateObj = new Date(date);
+                return dateObj.getMonth() === currentMonth && 
+                       dateObj.getFullYear() === currentYear;
+            });
+            
+            const weeklyHours = [0, 0, 0, 0];
+            
+            monthDates.forEach(date => {
+                const dateObj = new Date(date);
+                const week = Math.floor((dateObj.getDate() - 1) / 7);
+                if (week < 4) {
+                    const data = history[date];
+                    if (data && data.lectures) {
+                        const dayHours = data.lectures.reduce((sum, lecture) => sum + lecture.hours, 0);
+                        weeklyHours[week] += dayHours;
+                    }
+                }
+            });
+            
+            this.charts.lectureTrend.data.datasets[0].data = weeklyHours;
+            this.charts.lectureTrend.update('none');
+        }
+        
+        // Update summary stats
+        const allLectures = dates.flatMap(date => history[date]?.lectures || []);
+        const totalHours = allLectures.reduce((sum, lecture) => sum + lecture.hours, 0);
+        const avgHours = dates.length > 0 ? (totalHours / dates.length) : 0;
+        
+        document.getElementById('total-lecture-hours').textContent = totalHours.toFixed(1);
+        document.getElementById('total-lectures').textContent = allLectures.length;
+        document.getElementById('avg-lecture-hours').textContent = avgHours.toFixed(1);
+    }
+
     generateReports() {
         this.generateDailyReport();
         this.generateWeeklyReport();
         this.generateMonthlyReport();
+        this.generateLectureReport();
     }
 
     generateDailyReport() {
@@ -969,7 +1322,7 @@ class DashboardApp {
                     <div class="insight-item positive">
                         <div class="insight-title">🏆 Exceptional Week</div>
                         <div class="insight-text">Your weekly average of ${average}% shows incredible consistency. You've maintained a ${streak}-day streak!</div>
-                </div>
+                    </div>
                     <div class="insight-item positive">
                         <div class="insight-title">📊 Weekly Summary</div>
                         <div class="insight-text">• ${dates.length} tracked days<br>• ${totalArchery} archery sessions<br>• ${totalWater} glasses of water<br>• ${streak}-day active streak</div>
@@ -1125,6 +1478,103 @@ class DashboardApp {
         insights.innerHTML = insightText;
     }
 
+    generateLectureReport() {
+        const insights = document.getElementById('lecture-insights');
+        if (!insights) return;
+        
+        const history = JSON.parse(localStorage.getItem('dashboardHistory') || '{}');
+        const dates = Object.keys(history).sort();
+        
+        const allLectures = dates.flatMap(date => history[date]?.lectures || []);
+        const totalHours = allLectures.reduce((sum, lecture) => sum + lecture.hours, 0);
+        
+        let insightText = '';
+        
+        if (allLectures.length === 0) {
+            insightText = `
+                <div class="insight-item">
+                    <div class="insight-title">📚 Start Tracking Lectures</div>
+                    <div class="insight-text">Begin tracking your lecture attendance to monitor your academic progress and identify patterns in your learning schedule.</div>
+                </div>
+                <div class="insight-item positive">
+                    <div class="insight-title">🎯 Academic Goals</div>
+                    <div class="insight-text">Aim for consistent lecture attendance. Research shows that regular attendance improves academic performance by up to 40%.</div>
+                </div>
+            `;
+        } else {
+            const weeklyHours = this.getWeeklyLectureHours();
+            const avgWeeklyHours = weeklyHours.reduce((a, b) => a + b, 0) / weeklyHours.length;
+            
+            const lecturerHours = {};
+            allLectures.forEach(lecture => {
+                lecturerHours[lecture.lecturer] = (lecturerHours[lecture.lecturer] || 0) + lecture.hours;
+            });
+            
+            const topLecturer = Object.entries(lecturerHours).sort((a, b) => b[1] - a[1])[0];
+            
+            if (avgWeeklyHours >= 15) {
+                insightText = `
+                    <div class="insight-item positive">
+                        <div class="insight-title">🏆 Excellent Attendance</div>
+                        <div class="insight-text">You're averaging ${avgWeeklyHours.toFixed(1)} hours per week! This level of dedication will significantly impact your academic success.</div>
+                    </div>
+                    <div class="insight-item">
+                        <div class="insight-title">📊 Attendance Summary</div>
+                        <div class="insight-text">• Total: ${totalHours.toFixed(1)} hours<br>• ${allLectures.length} lectures attended<br>• Most hours with ${this.getLecturerFullName(topLecturer[0])}: ${topLecturer[1].toFixed(1)}h</div>
+                    </div>
+                `;
+            } else if (avgWeeklyHours >= 10) {
+                insightText = `
+                    <div class="insight-item positive">
+                        <div class="insight-title">📈 Good Progress</div>
+                        <div class="insight-text">You're averaging ${avgWeeklyHours.toFixed(1)} hours per week. Consistent attendance is building strong academic habits.</div>
+                    </div>
+                    <div class="insight-item">
+                        <div class="insight-title">📊 Performance Metrics</div>
+                        <div class="insight-text">• ${totalHours.toFixed(1)} total hours<br>• ${allLectures.length} lectures<br>• ${dates.length} days tracked</div>
+                    </div>
+                `;
+            } else {
+                insightText = `
+                    <div class="insight-item warning">
+                        <div class="insight-title">📚 Building Consistency</div>
+                        <div class="insight-text">You're averaging ${avgWeeklyHours.toFixed(1)} hours per week. Consider increasing your lecture attendance for better academic results.</div>
+                    </div>
+                    <div class="insight-item">
+                        <div class="insight-title">🎯 Improvement Targets</div>
+                        <div class="insight-text">• Aim for 12+ hours per week<br>• Attend lectures with ${this.getLecturerFullName(topLecturer[0])} more often<br>• Track topics for better retention</div>
+                    </div>
+                `;
+            }
+        }
+        
+        insights.innerHTML = insightText;
+    }
+
+    getWeeklyLectureHours() {
+        const history = JSON.parse(localStorage.getItem('dashboardHistory') || '{}');
+        const dates = Object.keys(history).sort();
+        
+        // Get last 4 weeks
+        const weeklyHours = [0, 0, 0, 0];
+        const now = new Date();
+        
+        dates.forEach(date => {
+            const dateObj = new Date(date);
+            const weekDiff = Math.floor((now - dateObj) / (7 * 24 * 60 * 60 * 1000));
+            
+            if (weekDiff < 4) {
+                const data = history[date];
+                if (data && data.lectures) {
+                    const dayHours = data.lectures.reduce((sum, lecture) => sum + lecture.hours, 0);
+                    weeklyHours[weekDiff] += dayHours;
+                }
+            }
+        });
+        
+        return weeklyHours;
+    }
+
     showDownloadModal() {
         const modal = document.getElementById('download-modal');
         if (modal) {
@@ -1197,6 +1647,7 @@ class DashboardApp {
             const percentage = Math.round((completedCount / Math.max(total, 1)) * 100);
             const totalConsumption = data.consumption.water + data.consumption.coffee + data.consumption.tea;
             const selfCareStatus = (data.selfCare.hair ? 1 : 0) + (data.selfCare.face ? 1 : 0);
+            const lectureHours = data.lectures ? data.lectures.reduce((sum, lecture) => sum + lecture.hours, 0) : 0;
             
             historyHTML += `
                 <div class="history-day">
@@ -1218,9 +1669,9 @@ class DashboardApp {
                             <div class="history-stat-value">${data.archery.length}</div>
                             <div class="history-stat-label">Archery</div>
                         </div>
-                        <div class="history-stat" data-date="${dateStr}" data-type="selfcare">
-                            <div class="history-stat-value">${selfCareStatus === 2 ? '✓' : (selfCareStatus === 1 ? '○' : '✗')}</div>
-                            <div class="history-stat-label">Self-Care</div>
+                        <div class="history-stat" data-date="${dateStr}" data-type="lectures">
+                            <div class="history-stat-value">${lectureHours.toFixed(1)}</div>
+                            <div class="history-stat-label">Lecture Hours</div>
                         </div>
                     </div>
                 </div>
@@ -1291,6 +1742,29 @@ class DashboardApp {
                 }
                 break;
                 
+            case 'lectures':
+                title = `Lecture Attendance - ${date}`;
+                if (!data.lectures || data.lectures.length === 0) {
+                    content = '<p>No lectures attended for this day.</p>';
+                } else {
+                    const totalHours = data.lectures.reduce((sum, lecture) => sum + lecture.hours, 0);
+                    content = `
+                        <div class="detailed-view">
+                            ${data.lectures.map(lecture => `
+                                <div class="detailed-item">
+                                    <span>${this.getLecturerFullName(lecture.lecturer)}${lecture.topic ? ` - ${lecture.topic}` : ''}</span>
+                                    <strong>${lecture.hours} hour${lecture.hours !== 1 ? 's' : ''}</strong>
+                                </div>
+                            `).join('')}
+                            <div class="detailed-item">
+                                <span>Total Hours</span>
+                                <strong>${totalHours.toFixed(1)} hours</strong>
+                            </div>
+                        </div>
+                    `;
+                }
+                break;
+                
             case 'selfcare':
                 title = `Self-Care Details - ${date}`;
                 content = `
@@ -1330,7 +1804,7 @@ class DashboardApp {
         // Add title
         doc.setFontSize(20);
         doc.setTextColor(59, 130, 246);
-        doc.text('Discipline OS - Personal Dashboard Report', 105, 20, { align: 'center' });
+        doc.text('Cartography of Days - Personal Dashboard Report', 105, 20, { align: 'center' });
         
         // Add Malayalam quote
         doc.setFontSize(10);
@@ -1445,6 +1919,20 @@ class DashboardApp {
                 doc.text(`• Tea: ${data.consumption.tea} cups`, 30, yPos);
                 yPos += 3;
                 
+                // Lecture Attendance
+                if (data.lectures && data.lectures.length > 0) {
+                    const lectureHours = data.lectures.reduce((sum, lecture) => sum + lecture.hours, 0);
+                    doc.text('Lecture Attendance:', 25, yPos);
+                    yPos += 6;
+                    data.lectures.forEach(lecture => {
+                        doc.text(`• ${this.getLecturerFullName(lecture.lecturer)}: ${lecture.hours} hour${lecture.hours !== 1 ? 's' : ''}${lecture.topic ? ` - ${lecture.topic}` : ''}`, 30, yPos, { maxWidth: 150 });
+                        yPos += 5;
+                    });
+                    doc.text(`Total: ${lectureHours.toFixed(1)} hours`, 30, yPos);
+                    yPos += 5;
+                }
+                yPos += 3;
+                
                 // Archery Sessions
                 doc.text('Archery Sessions:', 25, yPos);
                 yPos += 6;
@@ -1501,8 +1989,13 @@ class DashboardApp {
             doc.text(insights, 20, yPos, { maxWidth: 170 });
         }
         
+        // Add signature
+        doc.setFontSize(10);
+        doc.setTextColor(100, 100, 100);
+        doc.text('ഒരു സംഗ്രഹം : അഭികൃഷ്ണൻ', 105, 280, { align: 'center' });
+        
         // Save the PDF
-        const fileName = `DisciplineOS_${type}_Report_${this.formatDate(new Date())}.pdf`;
+        const fileName = `CartographyOfDays_${type}_Report_${this.formatDate(new Date())}.pdf`;
         doc.save(fileName);
         
         alert(`PDF report generated: ${fileName}`);
@@ -1673,9 +2166,17 @@ class DashboardApp {
                 document.querySelectorAll('.report-section').forEach(section => {
                     section.classList.remove('active');
                 });
-                const reportSection = document.getElementById(`${period}-report`);
+                const reportId = period === 'lectures' ? 'lecture-report' : `${period}-report`;
+                const reportSection = document.getElementById(reportId);
                 if (reportSection) {
                     reportSection.classList.add('active');
+                    
+                    // Update lecture charts when lecture tab is selected
+                    if (period === 'lectures') {
+                        setTimeout(() => {
+                            this.updateLectureCharts();
+                        }, 100);
+                    }
                 }
             });
         });
@@ -1692,6 +2193,33 @@ class DashboardApp {
                 }
             });
         }
+
+        // Add lecture button
+        const addLectureBtn = document.getElementById('add-lecture');
+        if (addLectureBtn) {
+            addLectureBtn.addEventListener('click', () => {
+                this.showLectureModal();
+            });
+        }
+
+        // Save lecture button
+        const saveLectureBtn = document.getElementById('save-lecture');
+        if (saveLectureBtn) {
+            saveLectureBtn.addEventListener('click', () => {
+                this.saveLectureAttendance();
+            });
+        }
+
+        // Lecture delete buttons (event delegation)
+        document.addEventListener('click', (e) => {
+            const deleteBtn = e.target.closest('.lecture-delete');
+            if (deleteBtn && deleteBtn.dataset.id) {
+                const lectureId = parseInt(deleteBtn.dataset.id);
+                if (confirm('Delete this lecture attendance record?')) {
+                    this.deleteLectureAttendance(lectureId);
+                }
+            }
+        });
 
         // Download button
         const downloadBtn = document.getElementById('download-btn');
@@ -1746,7 +2274,7 @@ class DashboardApp {
                     history: JSON.parse(history || '{}'),
                     settings: JSON.parse(settings || '{}'),
                     exportDate: new Date().toISOString(),
-                    version: '3.0'
+                    version: '3.1'
                 };
                 
                 try {
@@ -1754,7 +2282,7 @@ class DashboardApp {
                     const url = URL.createObjectURL(blob);
                     const a = document.createElement('a');
                     a.href = url;
-                    a.download = `discipline_os_backup_${this.formatDate(new Date())}.json`;
+                    a.download = `cartography_of_days_backup_${this.formatDate(new Date())}.json`;
                     document.body.appendChild(a);
                     a.click();
                     document.body.removeChild(a);
@@ -1832,6 +2360,7 @@ class DashboardApp {
         const closeHistoryModal = document.getElementById('close-history-modal');
         const closeDetailModal = document.getElementById('close-detail-modal');
         const closeSettingsModal = document.getElementById('close-settings-modal');
+        const closeLectureModal = document.getElementById('close-lecture-modal');
         
         if (closeDownloadModal) {
             closeDownloadModal.addEventListener('click', () => {
@@ -1854,6 +2383,12 @@ class DashboardApp {
         if (closeSettingsModal) {
             closeSettingsModal.addEventListener('click', () => {
                 document.getElementById('settings-modal').classList.remove('show');
+            });
+        }
+        
+        if (closeLectureModal) {
+            closeLectureModal.addEventListener('click', () => {
+                document.getElementById('lecture-modal').classList.remove('show');
             });
         }
 
@@ -1979,6 +2514,7 @@ class DashboardApp {
         window.addEventListener('resize', () => {
             setTimeout(() => {
                 this.updateCharts();
+                this.updateLectureCharts();
             }, 250);
         });
     }
@@ -1990,7 +2526,7 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
         app = new DashboardApp();
         window.app = app; // Make available globally for debugging
-        console.log('Discipline OS Dashboard initialized successfully');
+        console.log('Cartography of Days Dashboard initialized successfully');
     } catch (error) {
         console.error('Error initializing DashboardApp:', error);
         alert('Error loading dashboard. Please refresh the page.');
@@ -2005,640 +2541,4 @@ window.addEventListener('error', function(e) {
 // Add unhandled rejection handler
 window.addEventListener('unhandledrejection', function(e) {
     console.error('Unhandled promise rejection:', e.reason);
-});
-// ===== LECTURE ATTENDANCE METHODS =====
-
-getLecturerFullName(code) {
-    const lecturers = {
-        'LSN': 'LSN',
-        'RK': 'RK',
-        'PR': 'PR',
-        'BM': 'BM',
-        'BKR': 'BKR',
-        'SDG': 'SDG',
-        'MSB': 'MSB',
-        'AS': 'AS',
-        'PP': 'PP'
-    };
-    return lecturers[code] || code;
-}
-
-updateLectureAttendance() {
-    const today = this.formatDate(this.currentDate);
-    const lectureList = document.getElementById('lecture-list');
-    const history = JSON.parse(localStorage.getItem('dashboardHistory') || '{}');
-    const todayData = history[today];
-    
-    if (!todayData || !todayData.lectures || todayData.lectures.length === 0) {
-        lectureList.innerHTML = `
-            <div class="no-data">
-                <i class="fas fa-chalkboard-teacher"></i>
-                <p>No lectures attended today</p>
-            </div>
-        `;
-        document.getElementById('today-lecture-hours').textContent = '0 hours';
-        document.getElementById('today-lecture-count').textContent = '0 lectures';
-    } else {
-        const totalHours = todayData.lectures.reduce((sum, lecture) => sum + lecture.hours, 0);
-        lectureList.innerHTML = todayData.lectures.map(lecture => `
-            <div class="lecture-item">
-                <div class="lecture-info">
-                    <div class="lecture-lecturer">${this.getLecturerFullName(lecture.lecturer)}</div>
-                    <div class="lecture-hours">${lecture.hours} hour${lecture.hours !== 1 ? 's' : ''}</div>
-                    ${lecture.topic ? `<div class="lecture-topic">${lecture.topic}</div>` : ''}
-                </div>
-                <div class="lecture-actions">
-                    <button class="lecture-delete" data-id="${lecture.id}">
-                        <i class="fas fa-trash"></i>
-                    </button>
-                </div>
-            </div>
-        `).join('');
-        
-        document.getElementById('today-lecture-hours').textContent = `${totalHours} hour${totalHours !== 1 ? 's' : ''}`;
-        document.getElementById('today-lecture-count').textContent = `${todayData.lectures.length} lecture${todayData.lectures.length !== 1 ? 's' : ''}`;
-    }
-    
-    // Update weekly and monthly stats
-    this.updateLectureStats();
-}
-
-updateLectureStats() {
-    const history = JSON.parse(localStorage.getItem('dashboardHistory') || '{}');
-    const dates = Object.keys(history).sort();
-    
-    // Weekly stats (last 7 days)
-    const last7Dates = dates.slice(-7);
-    let weeklyHours = 0;
-    let weeklyLectures = 0;
-    
-    last7Dates.forEach(date => {
-        const data = history[date];
-        if (data && data.lectures) {
-            weeklyHours += data.lectures.reduce((sum, lecture) => sum + lecture.hours, 0);
-            weeklyLectures += data.lectures.length;
-        }
-    });
-    
-    document.getElementById('weekly-lecture-hours').textContent = weeklyHours.toFixed(1);
-    
-    // Monthly stats (current month)
-    const currentMonth = new Date().getMonth();
-    const currentYear = new Date().getFullYear();
-    const monthDates = dates.filter(date => {
-        const dateObj = new Date(date);
-        return dateObj.getMonth() === currentMonth && 
-               dateObj.getFullYear() === currentYear;
-    });
-    
-    let monthlyHours = 0;
-    let monthlyLectures = 0;
-    
-    monthDates.forEach(date => {
-        const data = history[date];
-        if (data && data.lectures) {
-            monthlyHours += data.lectures.reduce((sum, lecture) => sum + lecture.hours, 0);
-            monthlyLectures += data.lectures.length;
-        }
-    });
-    
-    document.getElementById('monthly-lecture-hours').textContent = monthlyHours.toFixed(1);
-}
-
-showLectureModal() {
-    const modal = document.getElementById('lecture-modal');
-    if (modal) {
-        modal.classList.add('show');
-        document.getElementById('lecture-date').value = this.formatDate(this.currentDate);
-    }
-}
-
-saveLectureAttendance() {
-    const lecturer = document.getElementById('lecturer-select').value;
-    const hours = parseFloat(document.getElementById('lecture-hours').value);
-    const date = document.getElementById('lecture-date').value;
-    const topic = document.getElementById('lecture-topic').value.trim();
-    
-    if (!lecturer || !hours || hours <= 0) {
-        alert('Please select a lecturer and enter valid hours.');
-        return;
-    }
-    
-    const history = JSON.parse(localStorage.getItem('dashboardHistory') || '{}');
-    
-    if (!history[date]) {
-        history[date] = {
-            morningRoutine: this.getDefaultRoutine(),
-            consumption: { water: 0, coffee: 0, tea: 0 },
-            archery: [],
-            selfCare: { hair: false, face: false },
-            lectures: []
-        };
-    }
-    
-    if (!history[date].lectures) {
-        history[date].lectures = [];
-    }
-    
-    const lecture = {
-        id: Date.now(),
-        lecturer: lecturer,
-        hours: hours,
-        topic: topic || '',
-        timestamp: new Date().toISOString()
-    };
-    
-    history[date].lectures.push(lecture);
-    localStorage.setItem('dashboardHistory', JSON.stringify(history));
-    
-    this.showUndoToast('addLecture', lecture);
-    this.loadDate(this.currentDate);
-    document.getElementById('lecture-modal').classList.remove('show');
-}
-
-deleteLectureAttendance(lectureId) {
-    const history = JSON.parse(localStorage.getItem('dashboardHistory') || '{}');
-    const date = this.formatDate(this.currentDate);
-    
-    if (history[date] && history[date].lectures) {
-        const lecture = history[date].lectures.find(l => l.id === lectureId);
-        if (lecture) {
-            this.showUndoToast('removeLecture', lecture);
-            history[date].lectures = history[date].lectures.filter(l => l.id !== lectureId);
-            localStorage.setItem('dashboardHistory', JSON.stringify(history));
-            this.loadDate(this.currentDate);
-        }
-    }
-}
-
-// ===== LECTURE ANALYTICS METHODS =====
-
-setupLectureCharts() {
-    // Lecture Pie Chart
-    const lectureCtx = document.getElementById('lecture-chart');
-    if (lectureCtx) {
-        this.charts.lecture = new Chart(lectureCtx, {
-            type: 'pie',
-            data: {
-                labels: Object.keys(this.getLecturerFullName('')),
-                datasets: [{
-                    data: Object.keys(this.getLecturerFullName('')).map(() => 0),
-                    backgroundColor: [
-                        '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6',
-                        '#06b6d4', '#84cc16', '#f97316', '#ec4899'
-                    ],
-                    borderWidth: 2,
-                    borderColor: 'white'
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: {
-                        position: 'right',
-                        labels: {
-                            padding: 20,
-                            usePointStyle: true
-                        }
-                    }
-                }
-            }
-        });
-    }
-    
-    // Lecture Trend Chart
-    const lectureTrendCtx = document.getElementById('lecture-trend-chart');
-    if (lectureTrendCtx) {
-        this.charts.lectureTrend = new Chart(lectureTrendCtx, {
-            type: 'bar',
-            data: {
-                labels: ['Week 1', 'Week 2', 'Week 3', 'Week 4'],
-                datasets: [{
-                    label: 'Lecture Hours',
-                    data: [0, 0, 0, 0],
-                    backgroundColor: '#3b82f6',
-                    borderColor: '#2563eb',
-                    borderWidth: 2
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: { display: false }
-                },
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        title: {
-                            display: true,
-                            text: 'Hours'
-                        }
-                    }
-                }
-            }
-        });
-    }
-}
-
-updateLectureCharts() {
-    const history = JSON.parse(localStorage.getItem('dashboardHistory') || '{}');
-    const dates = Object.keys(history).sort();
-    
-    // Calculate hours by lecturer
-    const lecturerHours = {};
-    const lecturers = ['LSN', 'RK', 'PR', 'BM', 'BKR', 'SDG', 'MSB', 'AS', 'PP'];
-    
-    lecturers.forEach(lecturer => {
-        lecturerHours[lecturer] = 0;
-    });
-    
-    dates.forEach(date => {
-        const data = history[date];
-        if (data && data.lectures) {
-            data.lectures.forEach(lecture => {
-                if (lecturerHours.hasOwnProperty(lecture.lecturer)) {
-                    lecturerHours[lecture.lecturer] += lecture.hours;
-                }
-            });
-        }
-    });
-    
-    // Update pie chart
-    if (this.charts.lecture) {
-        this.charts.lecture.data.labels = lecturers.map(l => this.getLecturerFullName(l));
-        this.charts.lecture.data.datasets[0].data = lecturers.map(l => lecturerHours[l]);
-        this.charts.lecture.update('none');
-    }
-    
-    // Update lecturer stats
-    const lecturerStats = document.getElementById('lecturer-stats');
-    if (lecturerStats) {
-        const totalHours = Object.values(lecturerHours).reduce((a, b) => a + b, 0);
-        
-        let statsHTML = '';
-        lecturers.forEach(lecturer => {
-            const hours = lecturerHours[lecturer];
-            const percentage = totalHours > 0 ? Math.round((hours / totalHours) * 100) : 0;
-            
-            statsHTML += `
-                <div class="lecturer-stat-item">
-                    <span class="lecturer-name">
-                        <i class="fas fa-user-graduate"></i>
-                        ${this.getLecturerFullName(lecturer)}
-                    </span>
-                    <span class="lecturer-hours">
-                        ${hours.toFixed(1)}h
-                        <span class="lecturer-percentage">${percentage}%</span>
-                    </span>
-                </div>
-            `;
-        });
-        
-        lecturerStats.innerHTML = statsHTML;
-    }
-    
-    // Update trend chart (weekly hours per month)
-    if (this.charts.lectureTrend) {
-        const currentMonth = new Date().getMonth();
-        const currentYear = new Date().getFullYear();
-        const monthDates = dates.filter(date => {
-            const dateObj = new Date(date);
-            return dateObj.getMonth() === currentMonth && 
-                   dateObj.getFullYear() === currentYear;
-        });
-        
-        const weeklyHours = [0, 0, 0, 0];
-        
-        monthDates.forEach(date => {
-            const dateObj = new Date(date);
-            const week = Math.floor((dateObj.getDate() - 1) / 7);
-            if (week < 4) {
-                const data = history[date];
-                if (data && data.lectures) {
-                    const dayHours = data.lectures.reduce((sum, lecture) => sum + lecture.hours, 0);
-                    weeklyHours[week] += dayHours;
-                }
-            }
-        });
-        
-        this.charts.lectureTrend.data.datasets[0].data = weeklyHours;
-        this.charts.lectureTrend.update('none');
-    }
-    
-    // Update summary stats
-    const allLectures = dates.flatMap(date => history[date]?.lectures || []);
-    const totalHours = allLectures.reduce((sum, lecture) => sum + lecture.hours, 0);
-    const avgHours = dates.length > 0 ? (totalHours / dates.length) : 0;
-    
-    document.getElementById('total-lecture-hours').textContent = totalHours.toFixed(1);
-    document.getElementById('total-lectures').textContent = allLectures.length;
-    document.getElementById('avg-lecture-hours').textContent = avgHours.toFixed(1);
-}
-
-generateLectureReport() {
-    const insights = document.getElementById('lecture-insights');
-    if (!insights) return;
-    
-    const history = JSON.parse(localStorage.getItem('dashboardHistory') || '{}');
-    const dates = Object.keys(history).sort();
-    
-    const allLectures = dates.flatMap(date => history[date]?.lectures || []);
-    const totalHours = allLectures.reduce((sum, lecture) => sum + lecture.hours, 0);
-    
-    let insightText = '';
-    
-    if (allLectures.length === 0) {
-        insightText = `
-            <div class="insight-item">
-                <div class="insight-title">📚 Start Tracking Lectures</div>
-                <div class="insight-text">Begin tracking your lecture attendance to monitor your academic progress and identify patterns in your learning schedule.</div>
-            </div>
-            <div class="insight-item positive">
-                <div class="insight-title">🎯 Academic Goals</div>
-                <div class="insight-text">Aim for consistent lecture attendance. Research shows that regular attendance improves academic performance by up to 40%.</div>
-            </div>
-        `;
-    } else {
-        const weeklyHours = this.getWeeklyLectureHours();
-        const avgWeeklyHours = weeklyHours.reduce((a, b) => a + b, 0) / weeklyHours.length;
-        
-        const lecturerHours = {};
-        allLectures.forEach(lecture => {
-            lecturerHours[lecture.lecturer] = (lecturerHours[lecture.lecturer] || 0) + lecture.hours;
-        });
-        
-        const topLecturer = Object.entries(lecturerHours).sort((a, b) => b[1] - a[1])[0];
-        
-        if (avgWeeklyHours >= 15) {
-            insightText = `
-                <div class="insight-item positive">
-                    <div class="insight-title">🏆 Excellent Attendance</div>
-                    <div class="insight-text">You're averaging ${avgWeeklyHours.toFixed(1)} hours per week! This level of dedication will significantly impact your academic success.</div>
-                </div>
-                <div class="insight-item">
-                    <div class="insight-title">📊 Attendance Summary</div>
-                    <div class="insight-text">• Total: ${totalHours.toFixed(1)} hours<br>• ${allLectures.length} lectures attended<br>• Most hours with ${this.getLecturerFullName(topLecturer[0])}: ${topLecturer[1].toFixed(1)}h</div>
-                </div>
-            `;
-        } else if (avgWeeklyHours >= 10) {
-            insightText = `
-                <div class="insight-item positive">
-                    <div class="insight-title">📈 Good Progress</div>
-                    <div class="insight-text">You're averaging ${avgWeeklyHours.toFixed(1)} hours per week. Consistent attendance is building strong academic habits.</div>
-                </div>
-                <div class="insight-item">
-                    <div class="insight-title">📊 Performance Metrics</div>
-                    <div class="insight-text">• ${totalHours.toFixed(1)} total hours<br>• ${allLectures.length} lectures<br>• ${dates.length} days tracked</div>
-                </div>
-            `;
-        } else {
-            insightText = `
-                <div class="insight-item warning">
-                    <div class="insight-title">📚 Building Consistency</div>
-                    <div class="insight-text">You're averaging ${avgWeeklyHours.toFixed(1)} hours per week. Consider increasing your lecture attendance for better academic results.</div>
-                </div>
-                <div class="insight-item">
-                    <div class="insight-title">🎯 Improvement Targets</div>
-                    <div class="insight-text">• Aim for 12+ hours per week<br>• Attend lectures with ${this.getLecturerFullName(topLecturer[0])} more often<br>• Track topics for better retention</div>
-                </div>
-            `;
-        }
-    }
-    
-    insights.innerHTML = insightText;
-}
-
-getWeeklyLectureHours() {
-    const history = JSON.parse(localStorage.getItem('dashboardHistory') || '{}');
-    const dates = Object.keys(history).sort();
-    
-    // Get last 4 weeks
-    const weeklyHours = [0, 0, 0, 0];
-    const now = new Date();
-    
-    dates.forEach(date => {
-        const dateObj = new Date(date);
-        const weekDiff = Math.floor((now - dateObj) / (7 * 24 * 60 * 60 * 1000));
-        
-        if (weekDiff < 4) {
-            const data = history[date];
-            if (data && data.lectures) {
-                const dayHours = data.lectures.reduce((sum, lecture) => sum + lecture.hours, 0);
-                weeklyHours[weekDiff] += dayHours;
-            }
-        }
-    });
-    
-    return weeklyHours;
-}
-
-// ===== UPDATED METHODS =====
-
-// Update the init method to include lecture charts
-init() {
-    this.setupEventListeners();
-    this.loadDate(this.currentDate);
-    this.setupCharts();
-    this.setupLectureCharts(); // Add this line
-    this.updateUI();
-    this.updateSettingsDisplay();
-    this.generateReports();
-    this.updateLectureCharts(); // Add this line
-    
-    setTimeout(() => {
-        this.updateCharts();
-    }, 100);
-}
-
-// Update the saveHistory method to include lectures
-saveHistory() {
-    try {
-        const history = JSON.parse(localStorage.getItem('dashboardHistory') || '{}');
-        const dateStr = this.formatDate(this.currentDate);
-        
-        history[dateStr] = {
-            morningRoutine: this.state.morningRoutine,
-            consumption: this.state.consumption,
-            archery: this.state.archery,
-            selfCare: this.state.selfCare,
-            lectures: this.state.lectures || [], // Add this line
-            timestamp: new Date().toISOString()
-        };
-        
-        localStorage.setItem('dashboardHistory', JSON.stringify(history));
-        this.updateCharts();
-        this.updateLectureCharts(); // Add this line
-        this.generateReports();
-        return true;
-    } catch (e) {
-        console.error('Error saving history:', e);
-        alert('Error saving data. Please check browser storage permissions.');
-        return false;
-    }
-}
-
-// Update the loadDate method to include lectures
-loadDate(date) {
-    const dateStr = this.formatDate(date);
-    const history = JSON.parse(localStorage.getItem('dashboardHistory') || '{}');
-    
-    if (history[dateStr]) {
-        this.state = {
-            date: dateStr,
-            morningRoutine: history[dateStr].morningRoutine || this.getDefaultRoutine(),
-            consumption: history[dateStr].consumption || { water: 0, coffee: 0, tea: 0 },
-            archery: history[dateStr].archery || [],
-            selfCare: history[dateStr].selfCare || { hair: false, face: false },
-            lectures: history[dateStr].lectures || [] // Add this line
-        };
-    } else {
-        this.state = {
-            date: dateStr,
-            morningRoutine: this.getDefaultRoutine(),
-            consumption: { water: 0, coffee: 0, tea: 0 },
-            archery: [],
-            selfCare: { hair: false, face: false },
-            lectures: [] // Add this line
-        };
-    }
-    
-    // Update date display
-    document.getElementById('current-date-text').textContent = this.formatDateDisplay(date);
-    const today = this.formatDate(new Date());
-    document.getElementById('current-date-display').textContent = dateStr === today ? 'Today' : dateStr;
-    
-    this.updateUI();
-    this.updateLectureAttendance(); // Add this line
-    this.generateReports();
-    this.updateLectureCharts(); // Add this line
-    return true;
-}
-
-// Update the updateUI method to include lectures
-updateUI() {
-    this.updateMorningRoutine();
-    this.updateConsumption();
-    this.updateArchery();
-    this.updateSelfCare();
-    this.updateLectureAttendance(); // Add this line
-    this.updateStats();
-    this.updateCharts();
-}
-
-// Update the undoAction method to handle lectures
-undoAction(originalAction, data) {
-    switch (originalAction) {
-        case 'toggleRoutine':
-            const item = this.state.morningRoutine.find(r => r.id === data.id);
-            if (item) item.completed = !item.completed;
-            break;
-        case 'increment':
-            if (this.state.consumption[data.type] > 0) {
-                this.state.consumption[data.type]--;
-            }
-            break;
-        case 'decrement':
-            this.state.consumption[data.type]++;
-            break;
-        case 'toggleSelfCare':
-            this.state.selfCare[data.type] = !this.state.selfCare[data.type];
-            break;
-        case 'addArchery':
-            this.state.archery = this.state.archery.filter(a => a.id !== data.id);
-            break;
-        case 'removeArchery':
-            this.state.archery.push(data);
-            break;
-        case 'addLecture':
-            if (this.state.lectures) {
-                this.state.lectures = this.state.lectures.filter(l => l.id !== data.id);
-            }
-            break;
-        case 'removeLecture':
-            if (this.state.lectures) {
-                this.state.lectures.push(data);
-            }
-            break;
-    }
-    this.saveHistory();
-    this.updateUI();
-    this.generateReports();
-}
-
-// Update the generateReports method to include lecture report
-generateReports() {
-    this.generateDailyReport();
-    this.generateWeeklyReport();
-    this.generateMonthlyReport();
-    this.generateLectureReport(); // Add this line
-}
-
-// ===== UPDATED EVENT LISTENERS =====
-
-// Add these to your setupEventListeners method:
-
-// Add lecture button
-const addLectureBtn = document.getElementById('add-lecture');
-if (addLectureBtn) {
-    addLectureBtn.addEventListener('click', () => {
-        this.showLectureModal();
-    });
-}
-
-// Save lecture button
-const saveLectureBtn = document.getElementById('save-lecture');
-if (saveLectureBtn) {
-    saveLectureBtn.addEventListener('click', () => {
-        this.saveLectureAttendance();
-    });
-}
-
-// Close lecture modal
-const closeLectureModal = document.getElementById('close-lecture-modal');
-if (closeLectureModal) {
-    closeLectureModal.addEventListener('click', () => {
-        document.getElementById('lecture-modal').classList.remove('show');
-    });
-}
-
-// Lecture delete buttons (event delegation)
-document.addEventListener('click', (e) => {
-    const deleteBtn = e.target.closest('.lecture-delete');
-    if (deleteBtn && deleteBtn.dataset.id) {
-        const lectureId = parseInt(deleteBtn.dataset.id);
-        if (confirm('Delete this lecture attendance record?')) {
-            this.deleteLectureAttendance(lectureId);
-        }
-    }
-});
-
-// Report tabs - update to include lecture tab
-document.querySelectorAll('.report-tab').forEach(tab => {
-    tab.addEventListener('click', (e) => {
-        const period = e.target.dataset.period;
-        
-        // Update active tab
-        document.querySelectorAll('.report-tab').forEach(t => t.classList.remove('active'));
-        e.target.classList.add('active');
-        
-        // Show selected report
-        document.querySelectorAll('.report-section').forEach(section => {
-            section.classList.remove('active');
-        });
-        
-        const reportId = period === 'lectures' ? 'lecture-report' : `${period}-report`;
-        const reportSection = document.getElementById(reportId);
-        if (reportSection) {
-            reportSection.classList.add('active');
-            
-            // Update lecture charts when lecture tab is selected
-            if (period === 'lectures') {
-                setTimeout(() => {
-                    this.updateLectureCharts();
-                }, 100);
-            }
-        }
-    });
 });
